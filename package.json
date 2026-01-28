@@ -1,10 +1,13 @@
 {
-  "name": "local-addon-cli-bridge",
-  "productName": "CLI Bridge",
+  "name": "local-addon-mcp-server",
+  "productName": "MCP Server",
   "version": "1.0.0",
-  "description": "Extends Local's GraphQL API with additional mutations for CLI control (delete sites, etc.) and MCP Server for AI tools",
+  "description": "MCP (Model Context Protocol) server for Local, enabling AI tools like Claude Code to manage WordPress development sites",
   "main": "lib/main.js",
   "renderer": "lib/renderer/index.js",
+  "bin": {
+    "local-mcp": "./bin/mcp-stdio.js"
+  },
   "scripts": {
     "build": "tsc",
     "watch": "tsc --watch"
@@ -12,8 +15,9 @@
   "keywords": [
     "local",
     "addon",
-    "cli",
-    "graphql"
+    "mcp",
+    "ai",
+    "claude"
   ],
   "author": "",
   "license": "MIT",

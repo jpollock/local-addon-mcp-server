@@ -13,7 +13,7 @@ import { McpServer } from './mcp/McpServer';
 import { MCP_SERVER } from '../common/constants';
 import { LocalServices } from '../common/types';
 
-const ADDON_NAME = 'CLI Bridge';
+const ADDON_NAME = 'MCP Server';
 
 let mcpServer: McpServer | null = null;
 

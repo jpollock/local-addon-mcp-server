@@ -122,6 +122,20 @@ const tools = [
     },
   },
   {
+    name: 'restart_site',
+    description: 'Restart a WordPress site (stops then starts it)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        site: {
+          type: 'string',
+          description: 'Site name or ID',
+        },
+      },
+      required: ['site'],
+    },
+  },
+  {
     name: 'wp_cli',
     description: 'Run a WP-CLI command against a WordPress site. The site must be running.',
     inputSchema: {
@@ -296,6 +310,29 @@ async function handleTool(name, args) {
 
       return {
         content: [{ type: 'text', text: `Stopped site: ${site.name}` }],
+      };
+    }
+
+    case 'restart_site': {
+      const site = await findSite(args.site);
+      if (!site) {
+        return {
+          content: [{ type: 'text', text: `Site not found: ${args.site}` }],
+          isError: true,
+        };
+      }
+
+      await graphqlRequest(`
+        mutation($id: ID!) {
+          restartSite(id: $id) {
+            id
+            status
+          }
+        }
+      `, { id: site.id });
+
+      return {
+        content: [{ type: 'text', text: `Restarted site: ${site.name}` }],
       };
     }
 

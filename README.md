@@ -1,93 +1,137 @@
-# CLI Bridge Addon for Local
+# MCP Server Addon for Local
 
-This addon extends Local's GraphQL API with additional mutations that enable full CLI control of Local.
+This addon adds Model Context Protocol (MCP) server capabilities to Local by WP Engine, enabling AI assistants like Claude Code, Claude.ai, ChatGPT, and Gemini to manage WordPress development sites.
 
-## Why This Addon?
+## Features
 
-Local's core GraphQL API doesn't expose all operations. Notably, `deleteSite` is only available via internal IPC. This addon bridges that gap by registering additional GraphQL mutations that wrap the internal services.
+- **MCP Server** - Exposes Local functionality to AI tools via stdio transport
+- **9 MCP Tools** - list_sites, get_site, start_site, stop_site, restart_site, create_site, delete_site, wp_cli, get_local_info
+- **GraphQL Extensions** - Additional mutations for programmatic control
+- **Preferences UI** - View status and connection info in Local preferences
 
-## Installation
+## Quick Start
 
-### Development (symlink)
+### 1. Install the Addon
 
 ```bash
-cd local-addon-cli-bridge
+cd local-addon-mcp-server
 npm install
 npm run build
-ln -sf "$(pwd)" "$HOME/Library/Application Support/Local/addons/local-addon-cli-bridge"
+ln -sf "$(pwd)" "$HOME/Library/Application Support/Local/addons/local-addon-mcp-server"
 ```
 
-Then restart Local.
+Restart Local.
 
-### Production
+### 2. Configure Claude Code
 
-Copy the built addon to Local's addons directory:
-- macOS: `~/Library/Application Support/Local/addons/`
-- Windows: `%APPDATA%\Local\addons\`
-- Linux: `~/.config/Local/addons/`
+Add to `~/.claude.json`:
 
-## Added GraphQL Mutations
+```json
+{
+  "mcpServers": {
+    "local": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/path/to/local-addon-mcp-server/bin/mcp-stdio.js"]
+    }
+  }
+}
+```
 
-### deleteSite
+### 3. Start Using
 
-Delete a single site from Local.
+Ask Claude Code to:
+- "List my Local sites"
+- "Start the blog site"
+- "Create a new site called test-project"
+- "Run wp plugin list on my-site"
+
+## Documentation
+
+- [User Guide](docs/USER-GUIDE.md) - Setup instructions and usage
+- [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues and solutions
+- [RFC](docs/RFC-001-MCP-Server.md) - Technical specification
+- [Implementation Plan](docs/IMPLEMENTATION-PLAN.md) - Development roadmap
+
+## MCP Tools
+
+| Tool | Description |
+|------|-------------|
+| `list_sites` | List all WordPress sites in Local |
+| `get_site` | Get detailed site information |
+| `start_site` | Start a stopped site |
+| `stop_site` | Stop a running site |
+| `restart_site` | Restart a site |
+| `create_site` | Create a new WordPress site |
+| `delete_site` | Delete a site (requires confirmation) |
+| `wp_cli` | Run WP-CLI commands |
+| `get_local_info` | Get Local version and status |
+
+## GraphQL Extensions
+
+This addon also extends Local's GraphQL API:
 
 ```graphql
+# Create a new site
+mutation CreateSite($input: CreateSiteInput!) {
+  createSite(input: $input) {
+    success
+    siteId
+    siteDomain
+  }
+}
+
+# Delete a site
 mutation DeleteSite($input: DeleteSiteInput!) {
   deleteSite(input: $input) {
     success
     error
-    siteId
   }
 }
 
-# Variables:
-{
-  "input": {
-    "id": "site-id-here",
-    "trashFiles": true,
-    "updateHosts": true
-  }
-}
-```
-
-### deleteSites
-
-Delete multiple sites at once.
-
-```graphql
-mutation DeleteSites($ids: [ID!]!, $trashFiles: Boolean) {
-  deleteSites(ids: $ids, trashFiles: $trashFiles) {
+# Run WP-CLI command
+mutation WpCli($input: WpCliInput!) {
+  wpCli(input: $input) {
     success
+    output
     error
-    siteId
   }
 }
 ```
 
-## Usage with local-cli
+## Architecture
 
-Once this addon is installed and Local is restarted, you can use:
+```
+┌─────────────────────────────────────────────┐
+│              Local App (Electron)            │
+│  ┌─────────────────────────────────────────┐ │
+│  │           MCP Server Addon               │ │
+│  │  ┌──────────────┐  ┌─────────────────┐  │ │
+│  │  │  SSE Server  │  │ GraphQL Extend  │  │ │
+│  │  │  (Health)    │  │ createSite etc  │  │ │
+│  │  └──────────────┘  └────────▲────────┘  │ │
+│  └─────────────────────────────┼───────────┘ │
+│                                │              │
+│  ┌─────────────────────────────▼───────────┐ │
+│  │           Local Services                 │ │
+│  │  siteData, siteProcessManager, wpCli    │ │
+│  └─────────────────────────────────────────┘ │
+└─────────────────────────────────────────────┘
+                    ▲
+                    │ GraphQL (localhost)
+                    │
+           ┌────────┴────────┐
+           │  bin/mcp-stdio  │ ◀── stdio ── Claude Code
+           └─────────────────┘
+```
+
+## Development
 
 ```bash
-local-cli delete my-site           # Delete site and trash files
-local-cli delete my-site --keep-files  # Remove from Local but keep files
+npm run watch   # Watch for changes and rebuild
+npm run build   # Production build
 ```
 
-## How It Works
+## License
 
-The addon uses Local's service container to access the internal `deleteSite` service:
-
-```typescript
-const services = LocalMain.getServiceContainer().cradle;
-const { deleteSite, graphql } = services;
-
-// Register our GraphQL extension
-graphql.registerGraphQLService('cli-bridge', typeDefs, resolvers);
-```
-
-The resolver then calls the internal service:
-
-```typescript
-await deleteSiteService.deleteSite({ site, trashFiles, updateHosts });
-```
+MIT
