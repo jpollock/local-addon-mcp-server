@@ -1,3 +1,8 @@
+---
+layout: default
+title: Troubleshooting
+---
+
 # MCP Server Troubleshooting Guide
 
 This guide helps diagnose and resolve common issues with the MCP Server.

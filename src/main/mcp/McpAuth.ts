@@ -53,18 +53,20 @@ export class McpAuth {
    */
   validateToken(providedToken: string | undefined): boolean {
     if (!this.token || !providedToken) {
-      this.logger.warn(`[MCP Auth] Validation failed: token=${!!this.token}, provided=${!!providedToken}`);
+      this.logger.warn(
+        `[MCP Auth] Validation failed: token=${!!this.token}, provided=${!!providedToken}`
+      );
       return false;
     }
 
     // Support both raw token and Bearer prefix
-    const rawToken = providedToken.startsWith('Bearer ')
-      ? providedToken.slice(7)
-      : providedToken;
+    const rawToken = providedToken.startsWith('Bearer ') ? providedToken.slice(7) : providedToken;
 
     const isValid = rawToken === this.token;
     if (!isValid) {
-      this.logger.warn(`[MCP Auth] Token mismatch: provided=${rawToken.substring(0, 20)}... stored=${this.token.substring(0, 20)}...`);
+      this.logger.warn(
+        `[MCP Auth] Token mismatch: provided=${rawToken.substring(0, 20)}... stored=${this.token.substring(0, 20)}...`
+      );
     }
     return isValid;
   }

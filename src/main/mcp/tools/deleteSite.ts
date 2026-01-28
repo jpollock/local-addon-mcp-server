@@ -50,10 +50,12 @@ export async function deleteSite(
 
   if (confirm !== true) {
     return {
-      content: [{
-        type: 'text',
-        text: 'Error: Deletion not confirmed. You must set confirm=true to delete a site. This is a safety measure to prevent accidental deletion.',
-      }],
+      content: [
+        {
+          type: 'text',
+          text: 'Error: Deletion not confirmed. You must set confirm=true to delete a site. This is a safety measure to prevent accidental deletion.',
+        },
+      ],
       isError: true,
     };
   }
@@ -66,10 +68,12 @@ export async function deleteSite(
       const allSites = Object.values(sitesMap) as any[];
       const siteNames = allSites.map((s: any) => s.name).join(', ');
       return {
-        content: [{
-          type: 'text',
-          text: `Site not found: "${siteQuery}". Available sites: ${siteNames || 'none'}`,
-        }],
+        content: [
+          {
+            type: 'text',
+            text: `Site not found: "${siteQuery}". Available sites: ${siteNames || 'none'}`,
+          },
+        ],
         isError: true,
       };
     }

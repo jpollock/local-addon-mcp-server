@@ -1,3 +1,8 @@
+---
+layout: default
+title: User Guide
+---
+
 # MCP Server User Guide
 
 The MCP (Model Context Protocol) Server enables AI tools like Claude Code, Claude.ai, ChatGPT, and other MCP-compatible assistants to control your Local WordPress sites.

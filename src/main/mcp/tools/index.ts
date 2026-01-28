@@ -13,6 +13,11 @@ import { getSite, getSiteDefinition } from './getSite';
 import { createSite, createSiteDefinition } from './createSite';
 import { deleteSite, deleteSiteDefinition } from './deleteSite';
 import { getLocalInfo, getLocalInfoDefinition } from './getLocalInfo';
+import { openSite, openSiteDefinition } from './openSite';
+import { cloneSite, cloneSiteDefinition } from './cloneSite';
+import { exportSite, exportSiteDefinition } from './exportSite';
+import { listBlueprints, listBlueprintsDefinition } from './listBlueprints';
+import { saveBlueprint, saveBlueprintDefinition } from './saveBlueprint';
 
 export type ToolHandler = (
   args: Record<string, unknown>,
@@ -30,14 +35,28 @@ const tools: Map<string, ToolRegistration> = new Map();
  * Register all available tools
  */
 export function registerTools(): void {
+  // Core site management
   tools.set('list_sites', { definition: listSitesDefinition, handler: listSites });
+  tools.set('get_site', { definition: getSiteDefinition, handler: getSite });
   tools.set('start_site', { definition: startSiteDefinition, handler: startSite });
   tools.set('stop_site', { definition: stopSiteDefinition, handler: stopSite });
   tools.set('restart_site', { definition: restartSiteDefinition, handler: restartSite });
-  tools.set('wp_cli', { definition: wpCliDefinition, handler: wpCli });
-  tools.set('get_site', { definition: getSiteDefinition, handler: getSite });
+
+  // Site operations
   tools.set('create_site', { definition: createSiteDefinition, handler: createSite });
   tools.set('delete_site', { definition: deleteSiteDefinition, handler: deleteSite });
+  tools.set('clone_site', { definition: cloneSiteDefinition, handler: cloneSite });
+  tools.set('export_site', { definition: exportSiteDefinition, handler: exportSite });
+  tools.set('open_site', { definition: openSiteDefinition, handler: openSite });
+
+  // WordPress CLI
+  tools.set('wp_cli', { definition: wpCliDefinition, handler: wpCli });
+
+  // Blueprints
+  tools.set('list_blueprints', { definition: listBlueprintsDefinition, handler: listBlueprints });
+  tools.set('save_blueprint', { definition: saveBlueprintDefinition, handler: saveBlueprint });
+
+  // System info
   tools.set('get_local_info', { definition: getLocalInfoDefinition, handler: getLocalInfo });
 }
 

@@ -24,7 +24,13 @@ export class ConnectionInfoManager {
 
     switch (platform) {
       case 'darwin':
-        return path.join(os.homedir(), 'Library', 'Application Support', 'Local', CONNECTION_INFO_FILENAME);
+        return path.join(
+          os.homedir(),
+          'Library',
+          'Application Support',
+          'Local',
+          CONNECTION_INFO_FILENAME
+        );
       case 'win32':
         return path.join(process.env.APPDATA || '', 'Local', CONNECTION_INFO_FILENAME);
       case 'linux':

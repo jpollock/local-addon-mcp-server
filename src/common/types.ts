@@ -103,4 +103,14 @@ export interface LocalServices {
     error(message: string, ...args: any[]): void;
     debug(message: string, ...args: any[]): void;
   };
+  // Optional services for extended functionality
+  browserManager?: {
+    openURL(url: string): Promise<void>;
+  };
+  cloneSite?: (site: any, newName: string) => Promise<any>;
+  exportSite?: (site: any, outputPath: string) => Promise<void>;
+  blueprints?: {
+    getBlueprints(): Promise<any[]>;
+    saveBlueprint(site: any, options: { name: string; description?: string }): Promise<any>;
+  };
 }

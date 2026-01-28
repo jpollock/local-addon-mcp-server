@@ -1,35 +1,74 @@
 {
-  "name": "local-addon-mcp-server",
+  "name": "@local-labs/local-addon-mcp-server",
   "productName": "MCP Server",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "MCP (Model Context Protocol) server for Local, enabling AI tools like Claude Code to manage WordPress development sites",
-  "main": "lib/main.js",
+  "main": "lib/main/index.js",
   "renderer": "lib/renderer/index.js",
   "bin": {
     "local-mcp": "./bin/mcp-stdio.js"
   },
   "scripts": {
-    "build": "tsc",
-    "watch": "tsc --watch"
+    "build": "npm run clean && tsc",
+    "watch": "tsc --watch",
+    "clean": "rm -rf lib coverage",
+    "lint": "eslint src --ext .ts,.tsx",
+    "lint:fix": "eslint src --ext .ts,.tsx --fix",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\"",
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "validate-release": "node scripts/validate-release.js",
+    "install-addon": "node scripts/install-addon.js",
+    "uninstall-addon": "node scripts/uninstall-addon.js"
   },
   "keywords": [
     "local",
     "addon",
     "mcp",
+    "model-context-protocol",
     "ai",
-    "claude"
+    "claude",
+    "wordpress"
   ],
-  "author": "",
+  "author": "Jeremy Pollock <jpollock911@gmail.com>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jpollock/local-addon-mcp-server.git"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "lib/",
+    "bin/",
+    "README.md",
+    "LICENSE"
+  ],
   "devDependencies": {
     "@getflywheel/local": "^9.0.0",
     "@types/fs-extra": "^11.0.4",
+    "@types/jest": "^29.5.12",
     "@types/node": "^20.0.0",
     "@types/react": "^19.2.10",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react": "^7.34.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
     "graphql-tag": "^2.12.6",
+    "jest": "^29.7.0",
+    "prettier": "^3.2.5",
+    "ts-jest": "^29.1.2",
     "typescript": "^5.0.0"
   },
   "localAddon": {
-    "minimumLocalVersion": "9.0.0"
+    "minimumLocalVersion": "9.0.0",
+    "type": "addon",
+    "category": "developer-tools"
   }
 }

@@ -10,7 +10,8 @@ import { getToolNames } from './index';
 
 export const getLocalInfoDefinition: McpToolDefinition = {
   name: 'get_local_info',
-  description: 'Get information about the Local application including version, platform, MCP server status, and available tools',
+  description:
+    'Get information about the Local application including version, platform, MCP server status, and available tools',
   inputSchema: {
     type: 'object',
     properties: {},

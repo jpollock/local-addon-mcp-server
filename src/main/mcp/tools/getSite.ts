@@ -8,7 +8,8 @@ import { findSite } from './helpers';
 
 export const getSiteDefinition: McpToolDefinition = {
   name: 'get_site',
-  description: 'Get detailed information about a WordPress site including PHP version, web server, database, and WordPress version',
+  description:
+    'Get detailed information about a WordPress site including PHP version, web server, database, and WordPress version',
   inputSchema: {
     type: 'object',
     properties: {
@@ -46,10 +47,12 @@ export async function getSite(
       const allSites = Object.values(sitesMap) as any[];
       const siteNames = allSites.map((s: any) => s.name).join(', ');
       return {
-        content: [{
-          type: 'text',
-          text: `Site not found: "${siteQuery}". Available sites: ${siteNames || 'none'}`,
-        }],
+        content: [
+          {
+            type: 'text',
+            text: `Site not found: "${siteQuery}". Available sites: ${siteNames || 'none'}`,
+          },
+        ],
         isError: true,
       };
     }
@@ -67,7 +70,8 @@ export async function getSite(
       environment: site.environment,
       services: {
         php: site.phpVersion || site.services?.php?.version,
-        webServer: site.webServer || site.services?.nginx?.version || site.services?.apache?.version,
+        webServer:
+          site.webServer || site.services?.nginx?.version || site.services?.apache?.version,
         database: site.mysql || site.services?.mysql?.version,
       },
       wordpress: {

@@ -298,9 +298,19 @@ function createResolvers(services: any) {
             blueprints: blueprintsList.map((bp: any) => ({
               name: bp.name,
               lastModified: bp.lastModified,
-              phpVersion: bp.phpVersion,
-              webServer: bp.webServer,
-              database: bp.database,
+              // Handle nested objects - extract just the name/type string
+              phpVersion:
+                typeof bp.phpVersion === 'object'
+                  ? bp.phpVersion?.name || bp.phpVersion?.version
+                  : bp.phpVersion,
+              webServer:
+                typeof bp.webServer === 'object'
+                  ? bp.webServer?.name || bp.webServer?.type
+                  : bp.webServer,
+              database:
+                typeof bp.database === 'object'
+                  ? bp.database?.name || bp.database?.type
+                  : bp.database,
             })),
           };
         } catch (error: any) {
@@ -316,15 +326,20 @@ function createResolvers(services: any) {
     Mutation: {
       wpCli: executeWpCli,
 
-      createSite: async (_parent: any, args: { input: {
-        name: string;
-        phpVersion?: string;
-        webServer?: string;
-        database?: string;
-        wpAdminUsername?: string;
-        wpAdminPassword?: string;
-        wpAdminEmail?: string;
-      } }) => {
+      createSite: async (
+        _parent: any,
+        args: {
+          input: {
+            name: string;
+            phpVersion?: string;
+            webServer?: string;
+            database?: string;
+            wpAdminUsername?: string;
+            wpAdminPassword?: string;
+            wpAdminEmail?: string;
+          };
+        }
+      ) => {
         const {
           name,
           phpVersion,
@@ -339,7 +354,10 @@ function createResolvers(services: any) {
           localLogger.info(`[${ADDON_NAME}] Creating site: ${name}`);
 
           // Generate slug and domain from name
-          const siteSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+          const siteSlug = name
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-|-$/g, '');
           const siteDomain = `${siteSlug}.local`;
 
           // Use os.homedir() for the path
@@ -392,7 +410,10 @@ function createResolvers(services: any) {
         }
       },
 
-      deleteSite: async (_parent: any, args: { input: { id: string; trashFiles?: boolean; updateHosts?: boolean } }) => {
+      deleteSite: async (
+        _parent: any,
+        args: { input: { id: string; trashFiles?: boolean; updateHosts?: boolean } }
+      ) => {
         const { id, trashFiles = true, updateHosts = true } = args.input;
 
         try {
@@ -522,7 +543,9 @@ function createResolvers(services: any) {
             newSiteName: newName,
           });
 
-          localLogger.info(`[${ADDON_NAME}] Successfully cloned site: ${newSite.name} (${newSite.id})`);
+          localLogger.info(
+            `[${ADDON_NAME}] Successfully cloned site: ${newSite.name} (${newSite.id})`
+          );
 
           return {
             success: true,
@@ -543,7 +566,10 @@ function createResolvers(services: any) {
         }
       },
 
-      exportSite: async (_parent: any, args: { input: { siteId: string; outputPath?: string } }) => {
+      exportSite: async (
+        _parent: any,
+        args: { input: { siteId: string; outputPath?: string } }
+      ) => {
         const { siteId, outputPath } = args.input;
         const os = require('os');
         const path = require('path');
@@ -640,17 +666,15 @@ async function startMcpServer(services: LocalServices, logger: any): Promise<voi
   }
 
   try {
-    mcpServer = new McpServer(
-      { port: MCP_SERVER.DEFAULT_PORT },
-      services,
-      logger
-    );
+    mcpServer = new McpServer({ port: MCP_SERVER.DEFAULT_PORT }, services, logger);
 
     await mcpServer.start();
 
     const info = mcpServer.getConnectionInfo();
     logger.info(`[${ADDON_NAME}] MCP server started on port ${info.port}`);
-    logger.info(`[${ADDON_NAME}] MCP connection info saved to: ~/Library/Application Support/Local/mcp-connection-info.json`);
+    logger.info(
+      `[${ADDON_NAME}] MCP connection info saved to: ~/Library/Application Support/Local/mcp-connection-info.json`
+    );
     logger.info(`[${ADDON_NAME}] Available tools: ${info.tools.join(', ')}`);
   } catch (error: any) {
     logger.error(`[${ADDON_NAME}] Failed to start MCP server:`, error);
@@ -732,13 +756,15 @@ function registerIpcHandlers(services: LocalServices, logger: any): void {
     }
   });
 
-  logger.info(`[${ADDON_NAME}] Registered IPC handlers: mcp:getStatus, mcp:getConnectionInfo, mcp:start, mcp:stop, mcp:restart, mcp:regenerateToken`);
+  logger.info(
+    `[${ADDON_NAME}] Registered IPC handlers: mcp:getStatus, mcp:getConnectionInfo, mcp:start, mcp:stop, mcp:restart, mcp:regenerateToken`
+  );
 }
 
 /**
  * Main addon initialization function
  */
-export default function (context: LocalMain.AddonMainContext): void {
+export default function (_context: LocalMain.AddonMainContext): void {
   const services = LocalMain.getServiceContainer().cradle as any;
   const { localLogger, graphql } = services;
 
@@ -748,7 +774,9 @@ export default function (context: LocalMain.AddonMainContext): void {
     // Register GraphQL extensions (for local-cli and MCP)
     const resolvers = createResolvers(services);
     graphql.registerGraphQLService('mcp-server', typeDefs, resolvers);
-    localLogger.info(`[${ADDON_NAME}] Registered GraphQL: createSite, deleteSite, wpCli, openSite, cloneSite, exportSite, blueprints, saveBlueprint`);
+    localLogger.info(
+      `[${ADDON_NAME}] Registered GraphQL: createSite, deleteSite, wpCli, openSite, cloneSite, exportSite, blueprints, saveBlueprint`
+    );
 
     // Start MCP server (for AI tools)
     const localServices: LocalServices = {

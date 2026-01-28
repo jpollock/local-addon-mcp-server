@@ -15,21 +15,15 @@ export function findSite(query: string, siteData: any): any | undefined {
   if (byId) return byId;
 
   // Try exact name match (case-insensitive)
-  const byExactName = sites.find(
-    (s: any) => s.name.toLowerCase() === query.toLowerCase()
-  );
+  const byExactName = sites.find((s: any) => s.name.toLowerCase() === query.toLowerCase());
   if (byExactName) return byExactName;
 
   // Try partial name match (case-insensitive)
-  const byPartialName = sites.find(
-    (s: any) => s.name.toLowerCase().includes(query.toLowerCase())
-  );
+  const byPartialName = sites.find((s: any) => s.name.toLowerCase().includes(query.toLowerCase()));
   if (byPartialName) return byPartialName;
 
   // Try domain match
-  const byDomain = sites.find(
-    (s: any) => s.domain?.toLowerCase() === query.toLowerCase()
-  );
+  const byDomain = sites.find((s: any) => s.domain?.toLowerCase() === query.toLowerCase());
   if (byDomain) return byDomain;
 
   return undefined;

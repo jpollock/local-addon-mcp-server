@@ -94,9 +94,7 @@ export async function createSite(
   // Check if site with this name already exists
   const sitesMap = services.siteData.getSites();
   const existingSites = Object.values(sitesMap) as any[];
-  const existingSite = existingSites.find(
-    (s: any) => s.name.toLowerCase() === name.toLowerCase()
-  );
+  const existingSite = existingSites.find((s: any) => s.name.toLowerCase() === name.toLowerCase());
   if (existingSite) {
     return {
       content: [{ type: 'text', text: `Error: A site named "${name}" already exists` }],
@@ -106,7 +104,10 @@ export async function createSite(
 
   try {
     // Build site slug (used for domain and path)
-    const siteSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const siteSlug = name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
 
     // Build site domain
     const siteDomain = domain || `${siteSlug}.local`;

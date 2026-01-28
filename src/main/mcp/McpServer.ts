@@ -5,11 +5,7 @@
 
 import http from 'http';
 import { URL } from 'url';
-import {
-  MCP_SERVER,
-  MCP_ENDPOINTS,
-  REQUEST_TIMEOUT_MS,
-} from '../../common/constants';
+import { MCP_SERVER, MCP_ENDPOINTS } from '../../common/constants';
 import {
   McpConnectionInfo,
   McpServerConfig,
@@ -60,7 +56,9 @@ export class McpServer {
     const existingInfo = await this.connectionInfo.load();
     if (existingInfo?.authToken) {
       this.auth.setToken(existingInfo.authToken);
-      this.logger.info(`[MCP] Loaded existing auth token: ${existingInfo.authToken.substring(0, 20)}...`);
+      this.logger.info(
+        `[MCP] Loaded existing auth token: ${existingInfo.authToken.substring(0, 20)}...`
+      );
     }
 
     // Find available port
@@ -177,7 +175,9 @@ export class McpServer {
       }
     }
 
-    throw new Error(`No available ports in range ${MCP_SERVER.PORT_RANGE.MIN}-${MCP_SERVER.PORT_RANGE.MAX}`);
+    throw new Error(
+      `No available ports in range ${MCP_SERVER.PORT_RANGE.MIN}-${MCP_SERVER.PORT_RANGE.MAX}`
+    );
   }
 
   /**
@@ -235,13 +235,15 @@ export class McpServer {
     const status = this.getStatus();
     const token = this.auth.getToken();
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({
-      status: 'ok',
-      version: MCP_SERVER.VERSION,
-      uptime: status.uptime,
-      tools: getToolNames(),
-      tokenPrefix: token.substring(0, 20),
-    }));
+    res.end(
+      JSON.stringify({
+        status: 'ok',
+        version: MCP_SERVER.VERSION,
+        uptime: status.uptime,
+        tools: getToolNames(),
+        tokenPrefix: token.substring(0, 20),
+      })
+    );
   }
 
   /**
@@ -251,7 +253,7 @@ export class McpServer {
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
+      Connection: 'keep-alive',
       'Access-Control-Allow-Origin': '*',
     });
 
@@ -360,11 +362,7 @@ export class McpServer {
           };
         }
 
-        const result = await executeTool(
-          params.name,
-          params.arguments || {},
-          this.services
-        );
+        const result = await executeTool(params.name, params.arguments || {}, this.services);
 
         return {
           jsonrpc: '2.0',

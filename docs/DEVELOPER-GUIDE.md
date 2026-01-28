@@ -1,3 +1,8 @@
+---
+layout: default
+title: Developer Guide
+---
+
 # MCP Server Developer Guide
 
 This guide explains the architecture and implementation of the MCP Server addon for Local by WP Engine.

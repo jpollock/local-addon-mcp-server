@@ -19,7 +19,8 @@ export const wpCliDefinition: McpToolDefinition = {
       command: {
         type: 'array',
         items: { type: 'string' },
-        description: 'WP-CLI command and arguments as array, e.g. ["plugin", "list", "--format=json"]',
+        description:
+          'WP-CLI command and arguments as array, e.g. ["plugin", "list", "--format=json"]',
       },
     },
     required: ['site', 'command'],
@@ -46,7 +47,12 @@ export async function wpCli(
 
   if (!command || !Array.isArray(command) || command.length === 0) {
     return {
-      content: [{ type: 'text', text: 'Error: command parameter is required and must be a non-empty array' }],
+      content: [
+        {
+          type: 'text',
+          text: 'Error: command parameter is required and must be a non-empty array',
+        },
+      ],
       isError: true,
     };
   }
@@ -58,10 +64,12 @@ export async function wpCli(
       const allSites = services.siteData.getSites();
       const siteNames = allSites.map((s: any) => s.name).join(', ');
       return {
-        content: [{
-          type: 'text',
-          text: `Site not found: "${siteQuery}". Available sites: ${siteNames || 'none'}`,
-        }],
+        content: [
+          {
+            type: 'text',
+            text: `Site not found: "${siteQuery}". Available sites: ${siteNames || 'none'}`,
+          },
+        ],
         isError: true,
       };
     }
@@ -70,10 +78,12 @@ export async function wpCli(
 
     if (currentStatus !== 'running') {
       return {
-        content: [{
-          type: 'text',
-          text: `Site "${site.name}" is not running. Start it first with the start_site tool.`,
-        }],
+        content: [
+          {
+            type: 'text',
+            text: `Site "${site.name}" is not running. Start it first with the start_site tool.`,
+          },
+        ],
         isError: true,
       };
     }

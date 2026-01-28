@@ -5,24 +5,49 @@ This addon adds Model Context Protocol (MCP) server capabilities to Local by WP 
 ## Features
 
 - **MCP Server** - Exposes Local functionality to AI tools via stdio transport
-- **9 MCP Tools** - list_sites, get_site, start_site, stop_site, restart_site, create_site, delete_site, wp_cli, get_local_info
+- **14 MCP Tools** - Site management, WP-CLI, blueprints, and more
 - **GraphQL Extensions** - Additional mutations for programmatic control
 - **Preferences UI** - View status and connection info in Local preferences
 
-## Quick Start
+## Installation
 
-### 1. Install the Addon
+### Method 1: Pre-built Release (Recommended)
+
+1. Go to the [Releases](https://github.com/getflywheel/local-addon-mcp-server/releases) page
+2. Download the latest `.tgz` file
+3. Open Local → Add-ons
+4. Click **Install from disk**
+5. Select the downloaded `.tgz` file
+6. Toggle the addon **ON**
+7. Click **Relaunch**
+
+### Method 2: Build from Source
 
 ```bash
+git clone https://github.com/getflywheel/local-addon-mcp-server.git
 cd local-addon-mcp-server
 npm install
 npm run build
-ln -sf "$(pwd)" "$HOME/Library/Application Support/Local/addons/local-addon-mcp-server"
+npm run install-addon
 ```
 
-Restart Local.
+Restart Local, then enable the addon in Add-ons settings.
 
-### 2. Configure Claude Code
+## Uninstallation
+
+**If installed from disk:**
+1. Open Local → Add-ons
+2. Toggle the MCP Server addon **OFF**
+3. Click **Remove**
+4. Restart Local
+
+**If installed from source:**
+```bash
+npm run uninstall-addon
+```
+Then restart Local.
+
+## Configure Claude Code
 
 Add to `~/.claude.json`:
 
@@ -30,7 +55,6 @@ Add to `~/.claude.json`:
 {
   "mcpServers": {
     "local": {
-      "type": "stdio",
       "command": "node",
       "args": ["/path/to/local-addon-mcp-server/bin/mcp-stdio.js"]
     }
@@ -38,20 +62,18 @@ Add to `~/.claude.json`:
 }
 ```
 
-### 3. Start Using
+**Note:** Replace `/path/to` with the actual path. For pre-built releases, the path will be in Local's addons directory.
+
+## Usage Examples
 
 Ask Claude Code to:
 - "List my Local sites"
 - "Start the blog site"
 - "Create a new site called test-project"
 - "Run wp plugin list on my-site"
-
-## Documentation
-
-- [User Guide](docs/USER-GUIDE.md) - Setup instructions and usage
-- [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues and solutions
-- [RFC](docs/RFC-001-MCP-Server.md) - Technical specification
-- [Implementation Plan](docs/IMPLEMENTATION-PLAN.md) - Development roadmap
+- "Clone my-site as my-site-copy"
+- "Open my-site in the browser"
+- "Export my-site to a zip file"
 
 ## MCP Tools
 
@@ -66,72 +88,33 @@ Ask Claude Code to:
 | `delete_site` | Delete a site (requires confirmation) |
 | `wp_cli` | Run WP-CLI commands |
 | `get_local_info` | Get Local version and status |
+| `open_site` | Open site in browser |
+| `clone_site` | Clone an existing site |
+| `export_site` | Export site to zip file |
+| `list_blueprints` | List available blueprints |
+| `save_blueprint` | Save site as blueprint |
 
-## GraphQL Extensions
+## Documentation
 
-This addon also extends Local's GraphQL API:
-
-```graphql
-# Create a new site
-mutation CreateSite($input: CreateSiteInput!) {
-  createSite(input: $input) {
-    success
-    siteId
-    siteDomain
-  }
-}
-
-# Delete a site
-mutation DeleteSite($input: DeleteSiteInput!) {
-  deleteSite(input: $input) {
-    success
-    error
-  }
-}
-
-# Run WP-CLI command
-mutation WpCli($input: WpCliInput!) {
-  wpCli(input: $input) {
-    success
-    output
-    error
-  }
-}
-```
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────┐
-│              Local App (Electron)            │
-│  ┌─────────────────────────────────────────┐ │
-│  │           MCP Server Addon               │ │
-│  │  ┌──────────────┐  ┌─────────────────┐  │ │
-│  │  │  SSE Server  │  │ GraphQL Extend  │  │ │
-│  │  │  (Health)    │  │ createSite etc  │  │ │
-│  │  └──────────────┘  └────────▲────────┘  │ │
-│  └─────────────────────────────┼───────────┘ │
-│                                │              │
-│  ┌─────────────────────────────▼───────────┐ │
-│  │           Local Services                 │ │
-│  │  siteData, siteProcessManager, wpCli    │ │
-│  └─────────────────────────────────────────┘ │
-└─────────────────────────────────────────────┘
-                    ▲
-                    │ GraphQL (localhost)
-                    │
-           ┌────────┴────────┐
-           │  bin/mcp-stdio  │ ◀── stdio ── Claude Code
-           └─────────────────┘
-```
+- [User Guide](docs/USER-GUIDE.md) - Setup instructions and usage
+- [Developer Guide](docs/DEVELOPER-GUIDE.md) - Contributing and architecture
+- [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues and solutions
+- [RFC](docs/RFC-001-MCP-Server.md) - Technical specification
 
 ## Development
 
 ```bash
-npm run watch   # Watch for changes and rebuild
-npm run build   # Production build
+npm run build       # Build for production
+npm run watch       # Watch mode for development
+npm run lint        # Run ESLint
+npm run test        # Run tests
+npm run typecheck   # TypeScript type checking
 ```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
 
 ## License
 
-MIT
+MIT - See [LICENSE](LICENSE) for details.

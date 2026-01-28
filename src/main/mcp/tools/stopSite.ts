@@ -45,10 +45,12 @@ export async function stopSite(
       const allSites = services.siteData.getSites();
       const siteNames = allSites.map((s: any) => s.name).join(', ');
       return {
-        content: [{
-          type: 'text',
-          text: `Site not found: "${siteQuery}". Available sites: ${siteNames || 'none'}`,
-        }],
+        content: [
+          {
+            type: 'text',
+            text: `Site not found: "${siteQuery}". Available sites: ${siteNames || 'none'}`,
+          },
+        ],
         isError: true,
       };
     }
