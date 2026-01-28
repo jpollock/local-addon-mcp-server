@@ -223,6 +223,86 @@ const tools = [
       properties: {},
     },
   },
+  {
+    name: 'open_site',
+    description: 'Open a WordPress site in the default browser',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        site: {
+          type: 'string',
+          description: 'Site name or ID',
+        },
+        path: {
+          type: 'string',
+          description: 'Path to open (default: /, use /wp-admin for admin panel)',
+        },
+      },
+      required: ['site'],
+    },
+  },
+  {
+    name: 'clone_site',
+    description: 'Clone an existing WordPress site to create a copy with a new name',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        site: {
+          type: 'string',
+          description: 'Site name or ID to clone',
+        },
+        new_name: {
+          type: 'string',
+          description: 'Name for the cloned site',
+        },
+      },
+      required: ['site', 'new_name'],
+    },
+  },
+  {
+    name: 'export_site',
+    description: 'Export a WordPress site to a zip file',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        site: {
+          type: 'string',
+          description: 'Site name or ID to export',
+        },
+        output_path: {
+          type: 'string',
+          description: 'Output directory path (default: ~/Downloads)',
+        },
+      },
+      required: ['site'],
+    },
+  },
+  {
+    name: 'list_blueprints',
+    description: 'List all available site blueprints (templates)',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'save_blueprint',
+    description: 'Save a site as a blueprint (template) for creating new sites',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        site: {
+          type: 'string',
+          description: 'Site name or ID to save as blueprint',
+        },
+        name: {
+          type: 'string',
+          description: 'Name for the blueprint',
+        },
+      },
+      required: ['site', 'name'],
+    },
+  },
 ];
 
 // Find site by name or ID
@@ -509,6 +589,219 @@ async function handleTool(name, args) {
 
       return {
         content: [{ type: 'text', text: JSON.stringify(info, null, 2) }],
+      };
+    }
+
+    case 'open_site': {
+      const site = await findSite(args.site);
+      if (!site) {
+        return {
+          content: [{ type: 'text', text: `Site not found: ${args.site}` }],
+          isError: true,
+        };
+      }
+
+      const sitePath = args.path || '/';
+      const data = await graphqlRequest(`
+        mutation($input: OpenSiteInput!) {
+          openSite(input: $input) {
+            success
+            error
+            url
+          }
+        }
+      `, {
+        input: {
+          siteId: site.id,
+          path: sitePath,
+        },
+      });
+
+      const result = data.openSite;
+      if (!result.success) {
+        return {
+          content: [{ type: 'text', text: `Failed to open site: ${result.error}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{ type: 'text', text: `Opened ${site.name} in browser: ${result.url}` }],
+      };
+    }
+
+    case 'clone_site': {
+      const site = await findSite(args.site);
+      if (!site) {
+        return {
+          content: [{ type: 'text', text: `Site not found: ${args.site}` }],
+          isError: true,
+        };
+      }
+
+      if (!args.new_name) {
+        return {
+          content: [{ type: 'text', text: 'Error: new_name is required' }],
+          isError: true,
+        };
+      }
+
+      const data = await graphqlRequest(`
+        mutation($input: CloneSiteInput!) {
+          cloneSite(input: $input) {
+            success
+            error
+            newSiteId
+            newSiteName
+            newSiteDomain
+          }
+        }
+      `, {
+        input: {
+          siteId: site.id,
+          newName: args.new_name,
+        },
+      });
+
+      const result = data.cloneSite;
+      if (!result.success) {
+        return {
+          content: [{ type: 'text', text: `Failed to clone site: ${result.error}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: `Cloned ${site.name} to ${result.newSiteName}\nNew site ID: ${result.newSiteId}\nNew domain: ${result.newSiteDomain}`,
+        }],
+      };
+    }
+
+    case 'export_site': {
+      const site = await findSite(args.site);
+      if (!site) {
+        return {
+          content: [{ type: 'text', text: `Site not found: ${args.site}` }],
+          isError: true,
+        };
+      }
+
+      const data = await graphqlRequest(`
+        mutation($input: ExportSiteInput!) {
+          exportSite(input: $input) {
+            success
+            error
+            exportPath
+          }
+        }
+      `, {
+        input: {
+          siteId: site.id,
+          outputPath: args.output_path || null,
+        },
+      });
+
+      const result = data.exportSite;
+      if (!result.success) {
+        return {
+          content: [{ type: 'text', text: `Failed to export site: ${result.error}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: `Exported ${site.name} to:\n${result.exportPath}`,
+        }],
+      };
+    }
+
+    case 'list_blueprints': {
+      const data = await graphqlRequest(`
+        query {
+          blueprints {
+            success
+            error
+            blueprints {
+              name
+              lastModified
+              phpVersion
+              webServer
+              database
+            }
+          }
+        }
+      `);
+
+      const result = data.blueprints;
+      if (!result.success) {
+        return {
+          content: [{ type: 'text', text: `Failed to list blueprints: ${result.error}` }],
+          isError: true,
+        };
+      }
+
+      if (!result.blueprints || result.blueprints.length === 0) {
+        return {
+          content: [{ type: 'text', text: 'No blueprints found. Use save_blueprint to create one from an existing site.' }],
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({ blueprints: result.blueprints, count: result.blueprints.length }, null, 2),
+        }],
+      };
+    }
+
+    case 'save_blueprint': {
+      const site = await findSite(args.site);
+      if (!site) {
+        return {
+          content: [{ type: 'text', text: `Site not found: ${args.site}` }],
+          isError: true,
+        };
+      }
+
+      if (!args.name) {
+        return {
+          content: [{ type: 'text', text: 'Error: name is required' }],
+          isError: true,
+        };
+      }
+
+      const data = await graphqlRequest(`
+        mutation($input: SaveBlueprintInput!) {
+          saveBlueprint(input: $input) {
+            success
+            error
+            blueprintName
+          }
+        }
+      `, {
+        input: {
+          siteId: site.id,
+          name: args.name,
+        },
+      });
+
+      const result = data.saveBlueprint;
+      if (!result.success) {
+        return {
+          content: [{ type: 'text', text: `Failed to save blueprint: ${result.error}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: `Saved ${site.name} as blueprint: ${result.blueprintName}\n\nYou can now create new sites from this blueprint.`,
+        }],
       };
     }
 

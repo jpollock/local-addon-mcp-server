@@ -89,6 +89,96 @@ const typeDefs = gql`
     siteDomain: String
   }
 
+  input OpenSiteInput {
+    "The site ID to open"
+    siteId: ID!
+    "Path to open (default: /, use /wp-admin for admin)"
+    path: String = "/"
+  }
+
+  type OpenSiteResult {
+    "Whether the site was opened successfully"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+    "The URL that was opened"
+    url: String
+  }
+
+  input CloneSiteInput {
+    "The site ID to clone"
+    siteId: ID!
+    "Name for the cloned site"
+    newName: String!
+  }
+
+  type CloneSiteResult {
+    "Whether cloning was successful"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+    "The new site ID"
+    newSiteId: ID
+    "The new site name"
+    newSiteName: String
+    "The new site domain"
+    newSiteDomain: String
+  }
+
+  input ExportSiteInput {
+    "The site ID to export"
+    siteId: ID!
+    "Output directory path (default: ~/Downloads)"
+    outputPath: String
+  }
+
+  type ExportSiteResult {
+    "Whether export was successful"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+    "Path to the exported zip file"
+    exportPath: String
+  }
+
+  type Blueprint {
+    "Blueprint name"
+    name: String!
+    "Last modified date"
+    lastModified: String
+    "PHP version"
+    phpVersion: String
+    "Web server type"
+    webServer: String
+    "Database type"
+    database: String
+  }
+
+  type BlueprintsResult {
+    "Whether query was successful"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+    "List of blueprints"
+    blueprints: [Blueprint!]
+  }
+
+  input SaveBlueprintInput {
+    "The site ID to save as blueprint"
+    siteId: ID!
+    "Name for the blueprint"
+    name: String!
+  }
+
+  type SaveBlueprintResult {
+    "Whether save was successful"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+    "The blueprint name"
+    blueprintName: String
+  }
+
   extend type Mutation {
     "Create a new WordPress site with full WordPress installation"
     createSite(input: CreateSiteInput!): CreateSiteResult!
@@ -101,11 +191,26 @@ const typeDefs = gql`
 
     "Run a WP-CLI command against a site"
     wpCli(input: WpCliInput!): WpCliResult!
+
+    "Open a site in the default browser"
+    openSite(input: OpenSiteInput!): OpenSiteResult!
+
+    "Clone an existing site"
+    cloneSite(input: CloneSiteInput!): CloneSiteResult!
+
+    "Export a site to a zip file"
+    exportSite(input: ExportSiteInput!): ExportSiteResult!
+
+    "Save a site as a blueprint"
+    saveBlueprint(input: SaveBlueprintInput!): SaveBlueprintResult!
   }
 
   extend type Query {
     "Run a WP-CLI command against a site (read-only operations)"
     wpCliQuery(input: WpCliInput!): WpCliResult!
+
+    "List all available blueprints"
+    blueprints: BlueprintsResult!
   }
 `;
 
@@ -113,7 +218,18 @@ const typeDefs = gql`
  * Create GraphQL resolvers that use Local's internal services
  */
 function createResolvers(services: any) {
-  const { deleteSite: deleteSiteService, siteData, localLogger, wpCli, siteProcessManager, addSite: addSiteService } = services;
+  const {
+    deleteSite: deleteSiteService,
+    siteData,
+    localLogger,
+    wpCli,
+    siteProcessManager,
+    addSite: addSiteService,
+    cloneSite: cloneSiteService,
+    exportSite: exportSiteService,
+    blueprints: blueprintsService,
+    browserManager,
+  } = services;
 
   // Shared WP-CLI execution logic
   const executeWpCli = async (
@@ -169,6 +285,33 @@ function createResolvers(services: any) {
   return {
     Query: {
       wpCliQuery: executeWpCli,
+
+      blueprints: async () => {
+        try {
+          localLogger.info(`[${ADDON_NAME}] Fetching blueprints`);
+
+          const blueprintsList = await blueprintsService.getBlueprints();
+
+          return {
+            success: true,
+            error: null,
+            blueprints: blueprintsList.map((bp: any) => ({
+              name: bp.name,
+              lastModified: bp.lastModified,
+              phpVersion: bp.phpVersion,
+              webServer: bp.webServer,
+              database: bp.database,
+            })),
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] Failed to fetch blueprints:`, error);
+          return {
+            success: false,
+            error: error.message || 'Unknown error',
+            blueprints: [],
+          };
+        }
+      },
     },
     Mutation: {
       wpCli: executeWpCli,
@@ -315,6 +458,174 @@ function createResolvers(services: any) {
           };
         }
       },
+
+      openSite: async (_parent: any, args: { input: { siteId: string; path?: string } }) => {
+        const { siteId, path = '/' } = args.input;
+
+        try {
+          const site = siteData.getSite(siteId);
+          if (!site) {
+            return {
+              success: false,
+              error: `Site not found: ${siteId}`,
+              url: null,
+            };
+          }
+
+          const protocol = site.isStarred ? 'https' : 'http';
+          const url = `${protocol}://${site.domain}${path}`;
+
+          localLogger.info(`[${ADDON_NAME}] Opening site in browser: ${url}`);
+
+          if (browserManager) {
+            await browserManager.openInBrowser(url);
+          } else {
+            // Fallback to shell.openExternal
+            const { shell } = require('electron');
+            await shell.openExternal(url);
+          }
+
+          return {
+            success: true,
+            error: null,
+            url,
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] Failed to open site:`, error);
+          return {
+            success: false,
+            error: error.message || 'Unknown error',
+            url: null,
+          };
+        }
+      },
+
+      cloneSite: async (_parent: any, args: { input: { siteId: string; newName: string } }) => {
+        const { siteId, newName } = args.input;
+
+        try {
+          const site = siteData.getSite(siteId);
+          if (!site) {
+            return {
+              success: false,
+              error: `Site not found: ${siteId}`,
+              newSiteId: null,
+              newSiteName: null,
+              newSiteDomain: null,
+            };
+          }
+
+          localLogger.info(`[${ADDON_NAME}] Cloning site ${site.name} to ${newName}`);
+
+          const newSite = await cloneSiteService.cloneSite({
+            site,
+            newSiteName: newName,
+          });
+
+          localLogger.info(`[${ADDON_NAME}] Successfully cloned site: ${newSite.name} (${newSite.id})`);
+
+          return {
+            success: true,
+            error: null,
+            newSiteId: newSite.id,
+            newSiteName: newSite.name,
+            newSiteDomain: newSite.domain,
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] Failed to clone site:`, error);
+          return {
+            success: false,
+            error: error.message || 'Unknown error',
+            newSiteId: null,
+            newSiteName: null,
+            newSiteDomain: null,
+          };
+        }
+      },
+
+      exportSite: async (_parent: any, args: { input: { siteId: string; outputPath?: string } }) => {
+        const { siteId, outputPath } = args.input;
+        const os = require('os');
+        const path = require('path');
+
+        try {
+          const site = siteData.getSite(siteId);
+          if (!site) {
+            return {
+              success: false,
+              error: `Site not found: ${siteId}`,
+              exportPath: null,
+            };
+          }
+
+          // Default to Downloads folder
+          const outputDir = outputPath || path.join(os.homedir(), 'Downloads');
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+          const fileName = `${site.name}-${timestamp}.zip`;
+          const fullPath = path.join(outputDir, fileName);
+
+          localLogger.info(`[${ADDON_NAME}] Exporting site ${site.name} to ${fullPath}`);
+
+          await exportSiteService.exportSite({
+            site,
+            outputPath: fullPath,
+            filter: '',
+          });
+
+          localLogger.info(`[${ADDON_NAME}] Successfully exported site to: ${fullPath}`);
+
+          return {
+            success: true,
+            error: null,
+            exportPath: fullPath,
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] Failed to export site:`, error);
+          return {
+            success: false,
+            error: error.message || 'Unknown error',
+            exportPath: null,
+          };
+        }
+      },
+
+      saveBlueprint: async (_parent: any, args: { input: { siteId: string; name: string } }) => {
+        const { siteId, name } = args.input;
+
+        try {
+          const site = siteData.getSite(siteId);
+          if (!site) {
+            return {
+              success: false,
+              error: `Site not found: ${siteId}`,
+              blueprintName: null,
+            };
+          }
+
+          localLogger.info(`[${ADDON_NAME}] Saving site ${site.name} as blueprint: ${name}`);
+
+          await blueprintsService.saveBlueprint({
+            name,
+            siteId,
+            filter: '',
+          });
+
+          localLogger.info(`[${ADDON_NAME}] Successfully saved blueprint: ${name}`);
+
+          return {
+            success: true,
+            error: null,
+            blueprintName: name,
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] Failed to save blueprint:`, error);
+          return {
+            success: false,
+            error: error.message || 'Unknown error',
+            blueprintName: null,
+          };
+        }
+      },
     },
   };
 }
@@ -434,10 +745,10 @@ export default function (context: LocalMain.AddonMainContext): void {
   try {
     localLogger.info(`[${ADDON_NAME}] Initializing...`);
 
-    // Register GraphQL extensions (for local-cli)
+    // Register GraphQL extensions (for local-cli and MCP)
     const resolvers = createResolvers(services);
-    graphql.registerGraphQLService('cli-bridge', typeDefs, resolvers);
-    localLogger.info(`[${ADDON_NAME}] Registered GraphQL: createSite, deleteSite, deleteSites, wpCli, wpCliQuery`);
+    graphql.registerGraphQLService('mcp-server', typeDefs, resolvers);
+    localLogger.info(`[${ADDON_NAME}] Registered GraphQL: createSite, deleteSite, wpCli, openSite, cloneSite, exportSite, blueprints, saveBlueprint`);
 
     // Start MCP server (for AI tools)
     const localServices: LocalServices = {
