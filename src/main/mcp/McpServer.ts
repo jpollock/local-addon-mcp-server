@@ -142,6 +142,18 @@ export class McpServer {
   }
 
   /**
+   * Regenerate the authentication token
+   */
+  async regenerateToken(): Promise<string> {
+    const newToken = this.auth.regenerateToken();
+    // Update connection info file with new token
+    const info = this.getConnectionInfo();
+    await this.connectionInfo.save(info);
+    this.logger.info(`[MCP] Auth token regenerated`);
+    return newToken;
+  }
+
+  /**
    * Find an available port starting from the preferred port
    */
   private async findAvailablePort(preferredPort: number): Promise<number> {

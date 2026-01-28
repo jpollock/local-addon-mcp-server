@@ -360,7 +360,7 @@ async function stopMcpServer(logger: any): Promise<void> {
 /**
  * Register IPC handlers for renderer communication
  */
-function registerIpcHandlers(logger: any): void {
+function registerIpcHandlers(services: LocalServices, logger: any): void {
   // Get MCP server status
   ipcMain.handle('mcp:getStatus', async () => {
     if (!mcpServer) {
@@ -377,7 +377,51 @@ function registerIpcHandlers(logger: any): void {
     return mcpServer.getConnectionInfo();
   });
 
-  logger.info(`[${ADDON_NAME}] Registered IPC handlers: mcp:getStatus, mcp:getConnectionInfo`);
+  // Start MCP server
+  ipcMain.handle('mcp:start', async () => {
+    try {
+      await startMcpServer(services, logger);
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Stop MCP server
+  ipcMain.handle('mcp:stop', async () => {
+    try {
+      await stopMcpServer(logger);
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Restart MCP server
+  ipcMain.handle('mcp:restart', async () => {
+    try {
+      await stopMcpServer(logger);
+      await startMcpServer(services, logger);
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Regenerate auth token
+  ipcMain.handle('mcp:regenerateToken', async () => {
+    if (!mcpServer) {
+      return { success: false, error: 'MCP server not running' };
+    }
+    try {
+      const newToken = await mcpServer.regenerateToken();
+      return { success: true, token: newToken };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  logger.info(`[${ADDON_NAME}] Registered IPC handlers: mcp:getStatus, mcp:getConnectionInfo, mcp:start, mcp:stop, mcp:restart, mcp:regenerateToken`);
 }
 
 /**
@@ -408,7 +452,7 @@ export default function (context: LocalMain.AddonMainContext): void {
     startMcpServer(localServices, localLogger);
 
     // Register IPC handlers for renderer
-    registerIpcHandlers(localLogger);
+    registerIpcHandlers(localServices, localLogger);
 
     localLogger.info(`[${ADDON_NAME}] Successfully initialized`);
   } catch (error: any) {

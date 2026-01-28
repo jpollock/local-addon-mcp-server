@@ -190,6 +190,14 @@ const tools = [
       required: ['site', 'confirm'],
     },
   },
+  {
+    name: 'get_local_info',
+    description: 'Get information about Local installation including version, platform, and available tools',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
 ];
 
 // Find site by name or ID
@@ -449,6 +457,33 @@ async function handleTool(name, args) {
 
       return {
         content: [{ type: 'text', text: `Deleted site: ${site.name}` }],
+      };
+    }
+
+    case 'get_local_info': {
+      const data = await graphqlRequest(`
+        query {
+          sites {
+            id
+          }
+        }
+      `);
+
+      const siteCount = data.sites?.length || 0;
+      const platform = os.platform();
+      const platformName = platform === 'darwin' ? 'macOS' : platform === 'win32' ? 'Windows' : 'Linux';
+
+      const info = {
+        mcpServerVersion: '1.0.0',
+        platform: platformName,
+        arch: os.arch(),
+        siteCount: siteCount,
+        availableTools: tools.map(t => t.name),
+        transport: 'stdio',
+      };
+
+      return {
+        content: [{ type: 'text', text: JSON.stringify(info, null, 2) }],
       };
     }
 
