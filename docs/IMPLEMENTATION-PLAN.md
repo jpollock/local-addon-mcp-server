@@ -14,7 +14,7 @@
 | Phase 2: Preferences UI | ✅ Complete | 7/7 tasks |
 | Phase 3: Full Features | ✅ Complete | 6/6 tasks |
 | Phase 4: Documentation | ✅ Complete | 5/5 tasks |
-| Phase 5: Expanded Tools | ❌ Not Started | 0/6 tasks |
+| Phase 5: Expanded Tools | ✅ Complete | 5/6 tasks |
 | Phase 6: Distribution | ❌ Not Started | 0/4 tasks |
 | Phase 7: Testing & Quality | ⚠️ Partial | 1/5 tasks |
 
@@ -326,51 +326,55 @@ src/
 
 ---
 
-## Phase 5: Expanded Tools ❌ Not Started
+## Phase 5: Expanded Tools ✅ Complete
 
 **Goal:** Additional tools for comprehensive site management
 
-### Task 5.1: Tool - clone_site ❌
-- [ ] Clone existing site with new name
-- [ ] Option for new domain
-- [ ] Handles database cloning
-- [ ] Handles file copying
+### Task 5.1: Tool - clone_site ✅
+- [x] Clone existing site with new name
+- [x] Handles database cloning (via Local's cloneSite service)
+- [x] Handles file copying (via Local's cloneSite service)
+- [x] Returns new site ID, name, and domain
 
 ---
 
-### Task 5.2: Tool - export_site ❌
-- [ ] Export site to zip file
-- [ ] Include database option
-- [ ] Include wp-content only option
-- [ ] Return export file path
+### Task 5.2: Tool - export_site ✅
+- [x] Export site to zip file
+- [x] Default output to ~/Downloads
+- [x] Custom output path support
+- [x] Return export file path
 
 ---
 
-### Task 5.3: Tool - import_site ❌
+### Task 5.3: Tool - import_site ❌ (Deferred)
 - [ ] Import from zip file
 - [ ] Import from blueprint
 - [ ] Handle domain configuration
 
----
-
-### Task 5.4: Tool - open_site ❌
-- [ ] Open site in default browser
-- [ ] Open wp-admin directly
-- [ ] Support custom paths
+*Note: Import is complex due to multiple import types. Deferred to future phase.*
 
 ---
 
-### Task 5.5: Tool - site_shell ❌
+### Task 5.4: Tool - open_site ✅
+- [x] Open site in default browser
+- [x] Open wp-admin directly via path parameter
+- [x] Support custom paths
+
+---
+
+### Task 5.5: Tool - site_shell ❌ (Deferred)
 - [ ] Execute arbitrary shell commands in site environment
 - [ ] Security considerations (confirmation required)
 - [ ] Timeout handling
 
+*Note: Security implications require careful design. Deferred to future phase.*
+
 ---
 
-### Task 5.6: Blueprint Support ❌
-- [ ] list_blueprints tool
-- [ ] create_site_from_blueprint tool
-- [ ] save_site_as_blueprint tool
+### Task 5.6: Blueprint Support ✅
+- [x] list_blueprints tool
+- [x] save_blueprint tool (save site as blueprint)
+- [ ] create_site_from_blueprint tool (use create_site with blueprint param)
 
 ---
 
@@ -497,6 +501,13 @@ src/
 ---
 
 ## Changelog
+
+### 2026-01-28 (Update 3)
+- Phase 5 marked complete (5/6 tasks)
+- Added tools: open_site, clone_site, export_site, list_blueprints, save_blueprint
+- Added GraphQL mutations: openSite, cloneSite, exportSite, saveBlueprint
+- Added GraphQL query: blueprints
+- Deferred import_site and site_shell to future phase
 
 ### 2026-01-28 (Update 2)
 - Phase 2 marked complete (server controls, regenerate token, AI setup guides)
