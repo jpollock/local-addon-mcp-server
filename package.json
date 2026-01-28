@@ -1,0 +1,23 @@
+{
+  "name": "local-addon-cli-bridge",
+  "productName": "CLI Bridge",
+  "version": "1.0.0",
+  "description": "Extends Local's GraphQL API with additional mutations for CLI control (delete sites, etc.)",
+  "main": "lib/main.js",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch"
+  },
+  "keywords": ["local", "addon", "cli", "graphql"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@getflywheel/local": "^9.0.0",
+    "@types/node": "^20.0.0",
+    "graphql-tag": "^2.12.6",
+    "typescript": "^5.0.0"
+  },
+  "localAddon": {
+    "minimumLocalVersion": "9.0.0"
+  }
+}
