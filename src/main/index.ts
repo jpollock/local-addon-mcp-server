@@ -7,6 +7,7 @@
  */
 
 import * as LocalMain from '@getflywheel/local/main';
+import { ipcMain } from 'electron';
 import gql from 'graphql-tag';
 import { McpServer } from './mcp/McpServer';
 import { MCP_SERVER } from '../common/constants';
@@ -248,6 +249,29 @@ async function stopMcpServer(logger: any): Promise<void> {
 }
 
 /**
+ * Register IPC handlers for renderer communication
+ */
+function registerIpcHandlers(logger: any): void {
+  // Get MCP server status
+  ipcMain.handle('mcp:getStatus', async () => {
+    if (!mcpServer) {
+      return { running: false, port: 0, uptime: 0 };
+    }
+    return mcpServer.getStatus();
+  });
+
+  // Get connection info
+  ipcMain.handle('mcp:getConnectionInfo', async () => {
+    if (!mcpServer) {
+      return null;
+    }
+    return mcpServer.getConnectionInfo();
+  });
+
+  logger.info(`[${ADDON_NAME}] Registered IPC handlers: mcp:getStatus, mcp:getConnectionInfo`);
+}
+
+/**
  * Main addon initialization function
  */
 export default function (context: LocalMain.AddonMainContext): void {
@@ -273,6 +297,9 @@ export default function (context: LocalMain.AddonMainContext): void {
     };
 
     startMcpServer(localServices, localLogger);
+
+    // Register IPC handlers for renderer
+    registerIpcHandlers(localLogger);
 
     localLogger.info(`[${ADDON_NAME}] Successfully initialized`);
   } catch (error: any) {
