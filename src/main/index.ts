@@ -59,7 +59,40 @@ const typeDefs = gql`
     error: String
   }
 
+  input CreateSiteInput {
+    "Site name (required)"
+    name: String!
+    "PHP version (e.g., '8.2.10'). Uses Local default if not specified."
+    phpVersion: String
+    "Web server type"
+    webServer: String
+    "Database type"
+    database: String
+    "WordPress admin username (default: admin)"
+    wpAdminUsername: String
+    "WordPress admin password (default: password)"
+    wpAdminPassword: String
+    "WordPress admin email (default: admin@local.test)"
+    wpAdminEmail: String
+  }
+
+  type CreateSiteResult {
+    "Whether site creation was initiated successfully"
+    success: Boolean!
+    "Error message if creation failed"
+    error: String
+    "The created site ID"
+    siteId: ID
+    "The site name"
+    siteName: String
+    "The site domain"
+    siteDomain: String
+  }
+
   extend type Mutation {
+    "Create a new WordPress site with full WordPress installation"
+    createSite(input: CreateSiteInput!): CreateSiteResult!
+
     "Delete a site from Local"
     deleteSite(input: DeleteSiteInput!): DeleteSiteResult!
 
@@ -80,7 +113,7 @@ const typeDefs = gql`
  * Create GraphQL resolvers that use Local's internal services
  */
 function createResolvers(services: any) {
-  const { deleteSite: deleteSiteService, siteData, localLogger, wpCli, siteProcessManager } = services;
+  const { deleteSite: deleteSiteService, siteData, localLogger, wpCli, siteProcessManager, addSite: addSiteService } = services;
 
   // Shared WP-CLI execution logic
   const executeWpCli = async (
@@ -139,6 +172,82 @@ function createResolvers(services: any) {
     },
     Mutation: {
       wpCli: executeWpCli,
+
+      createSite: async (_parent: any, args: { input: {
+        name: string;
+        phpVersion?: string;
+        webServer?: string;
+        database?: string;
+        wpAdminUsername?: string;
+        wpAdminPassword?: string;
+        wpAdminEmail?: string;
+      } }) => {
+        const {
+          name,
+          phpVersion,
+          webServer = 'nginx',
+          database = 'mysql',
+          wpAdminUsername = 'admin',
+          wpAdminPassword = 'password',
+          wpAdminEmail = 'admin@local.test',
+        } = args.input;
+
+        try {
+          localLogger.info(`[${ADDON_NAME}] Creating site: ${name}`);
+
+          // Generate slug and domain from name
+          const siteSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+          const siteDomain = `${siteSlug}.local`;
+
+          // Use os.homedir() for the path
+          const os = require('os');
+          const path = require('path');
+          const sitePath = path.join(os.homedir(), 'Local Sites', siteSlug);
+
+          const newSiteInfo: any = {
+            siteName: name,
+            siteDomain: siteDomain,
+            sitePath: sitePath,
+            webServer: webServer,
+            database: database,
+          };
+
+          if (phpVersion) {
+            newSiteInfo.phpVersion = phpVersion;
+          }
+
+          const wpCredentials = {
+            adminUsername: wpAdminUsername,
+            adminPassword: wpAdminPassword,
+            adminEmail: wpAdminEmail,
+          };
+
+          const site = await addSiteService.addSite({
+            newSiteInfo,
+            wpCredentials,
+            goToSite: false,
+          });
+
+          localLogger.info(`[${ADDON_NAME}] Successfully created site: ${name} (${site.id})`);
+
+          return {
+            success: true,
+            error: null,
+            siteId: site.id,
+            siteName: name,
+            siteDomain: siteDomain,
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] Failed to create site:`, error);
+          return {
+            success: false,
+            error: error.message || 'Unknown error',
+            siteId: null,
+            siteName: name,
+            siteDomain: null,
+          };
+        }
+      },
 
       deleteSite: async (_parent: any, args: { input: { id: string; trashFiles?: boolean; updateHosts?: boolean } }) => {
         const { id, trashFiles = true, updateHosts = true } = args.input;
@@ -284,7 +393,7 @@ export default function (context: LocalMain.AddonMainContext): void {
     // Register GraphQL extensions (for local-cli)
     const resolvers = createResolvers(services);
     graphql.registerGraphQLService('cli-bridge', typeDefs, resolvers);
-    localLogger.info(`[${ADDON_NAME}] Registered GraphQL: deleteSite, deleteSites, wpCli, wpCliQuery`);
+    localLogger.info(`[${ADDON_NAME}] Registered GraphQL: createSite, deleteSite, deleteSites, wpCli, wpCliQuery`);
 
     // Start MCP server (for AI tools)
     const localServices: LocalServices = {

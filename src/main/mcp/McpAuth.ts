@@ -19,7 +19,7 @@ export class McpAuth {
    */
   generateToken(): string {
     this.token = crypto.randomBytes(AUTH_TOKEN_LENGTH / 2).toString('base64');
-    this.logger.info('[MCP] Generated new authentication token');
+    this.logger.info(`[MCP] Generated new authentication token: ${this.token.substring(0, 20)}...`);
     return this.token;
   }
 
@@ -53,6 +53,7 @@ export class McpAuth {
    */
   validateToken(providedToken: string | undefined): boolean {
     if (!this.token || !providedToken) {
+      this.logger.warn(`[MCP Auth] Validation failed: token=${!!this.token}, provided=${!!providedToken}`);
       return false;
     }
 
@@ -61,7 +62,11 @@ export class McpAuth {
       ? providedToken.slice(7)
       : providedToken;
 
-    return rawToken === this.token;
+    const isValid = rawToken === this.token;
+    if (!isValid) {
+      this.logger.warn(`[MCP Auth] Token mismatch: provided=${rawToken.substring(0, 20)}... stored=${this.token.substring(0, 20)}...`);
+    }
+    return isValid;
   }
 
   /**

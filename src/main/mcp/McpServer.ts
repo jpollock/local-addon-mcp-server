@@ -56,6 +56,13 @@ export class McpServer {
       return;
     }
 
+    // Try to load existing token from connection info (for persistence across restarts)
+    const existingInfo = await this.connectionInfo.load();
+    if (existingInfo?.authToken) {
+      this.auth.setToken(existingInfo.authToken);
+      this.logger.info(`[MCP] Loaded existing auth token: ${existingInfo.authToken.substring(0, 20)}...`);
+    }
+
     // Find available port
     this.port = await this.findAvailablePort(this.port);
 
@@ -187,6 +194,18 @@ export class McpServer {
       return;
     }
 
+    // Handle CORS preflight
+    if (req.method === 'OPTIONS') {
+      res.writeHead(200, {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Max-Age': '86400',
+      });
+      res.end();
+      return;
+    }
+
     // Route to appropriate handler
     if (pathname === MCP_ENDPOINTS.SSE && req.method === 'GET') {
       this.handleSSE(req, res);
@@ -202,12 +221,14 @@ export class McpServer {
    */
   private handleHealth(req: http.IncomingMessage, res: http.ServerResponse): void {
     const status = this.getStatus();
+    const token = this.auth.getToken();
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       status: 'ok',
       version: MCP_SERVER.VERSION,
       uptime: status.uptime,
       tools: getToolNames(),
+      tokenPrefix: token.substring(0, 20),
     }));
   }
 
@@ -249,9 +270,21 @@ export class McpServer {
     req.on('end', async () => {
       try {
         const request: McpRequest = JSON.parse(body);
+
+        // Notifications don't have an id and don't expect a response
+        if (request.method?.startsWith('notifications/')) {
+          this.logger.info(`[MCP] Received notification: ${request.method}`);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end('{}');
+          return;
+        }
+
         const response = await this.processMessage(request);
 
-        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        });
         res.end(JSON.stringify(response));
       } catch (error: any) {
         this.logger.error('[MCP] Message handling error:', error);
@@ -325,6 +358,13 @@ export class McpServer {
           jsonrpc: '2.0',
           id,
           result,
+        };
+
+      case 'ping':
+        return {
+          jsonrpc: '2.0',
+          id,
+          result: {},
         };
 
       default:
