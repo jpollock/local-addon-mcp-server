@@ -79,7 +79,23 @@ export interface LocalServices {
     deleteSite(opts: { site: any; trashFiles: boolean; updateHosts: boolean }): Promise<void>;
   };
   addSite: {
-    // TODO: Add site creation types
+    addSite(opts: {
+      newSiteInfo: {
+        siteName: string;
+        siteDomain: string;
+        sitePath?: string;
+        multiSite?: 'no' | 'ms-subdir' | 'ms-subdomain';
+        phpVersion?: string;
+        webServer?: 'nginx' | 'apache';
+        database?: 'mysql' | 'mariadb';
+      };
+      wpCredentials?: {
+        adminUsername?: string;
+        adminPassword?: string;
+        adminEmail?: string;
+      };
+      goToSite?: boolean;
+    }): Promise<any>;
   };
   localLogger: {
     info(message: string, ...args: any[]): void;

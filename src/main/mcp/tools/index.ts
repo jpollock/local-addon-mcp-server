@@ -9,6 +9,10 @@ import { startSite, startSiteDefinition } from './startSite';
 import { stopSite, stopSiteDefinition } from './stopSite';
 import { restartSite, restartSiteDefinition } from './restartSite';
 import { wpCli, wpCliDefinition } from './wpCli';
+import { getSite, getSiteDefinition } from './getSite';
+import { createSite, createSiteDefinition } from './createSite';
+import { deleteSite, deleteSiteDefinition } from './deleteSite';
+import { getLocalInfo, getLocalInfoDefinition } from './getLocalInfo';
 
 export type ToolHandler = (
   args: Record<string, unknown>,
@@ -31,6 +35,10 @@ export function registerTools(): void {
   tools.set('stop_site', { definition: stopSiteDefinition, handler: stopSite });
   tools.set('restart_site', { definition: restartSiteDefinition, handler: restartSite });
   tools.set('wp_cli', { definition: wpCliDefinition, handler: wpCli });
+  tools.set('get_site', { definition: getSiteDefinition, handler: getSite });
+  tools.set('create_site', { definition: createSiteDefinition, handler: createSite });
+  tools.set('delete_site', { definition: deleteSiteDefinition, handler: deleteSite });
+  tools.set('get_local_info', { definition: getLocalInfoDefinition, handler: getLocalInfo });
 }
 
 /**
