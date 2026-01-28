@@ -10,6 +10,9 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const readline = require('readline');
+const http = require('http');
+const https = require('https');
+const { URL } = require('url');
 
 // Get Local's GraphQL connection info
 function getGraphQLConnectionInfo() {
@@ -35,32 +38,54 @@ function getGraphQLConnectionInfo() {
   }
 }
 
-// Make GraphQL request to Local
+// Make GraphQL request to Local (compatible with Node.js < 18)
 async function graphqlRequest(query, variables = {}) {
   const info = getGraphQLConnectionInfo();
   if (!info) {
     throw new Error('Local is not running or GraphQL connection info not found');
   }
 
-  const response = await fetch(info.url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${info.authToken}`,
-    },
-    body: JSON.stringify({ query, variables }),
+  const body = JSON.stringify({ query, variables });
+  const url = new URL(info.url);
+  const isHttps = url.protocol === 'https:';
+  const httpModule = isHttps ? https : http;
+
+  return new Promise((resolve, reject) => {
+    const req = httpModule.request({
+      hostname: url.hostname,
+      port: url.port || (isHttps ? 443 : 80),
+      path: url.pathname,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+        'Authorization': `Bearer ${info.authToken}`,
+      },
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          reject(new Error(`GraphQL request failed: ${res.statusCode}`));
+          return;
+        }
+        try {
+          const result = JSON.parse(data);
+          if (result.errors) {
+            reject(new Error(result.errors[0].message));
+            return;
+          }
+          resolve(result.data);
+        } catch (err) {
+          reject(new Error(`Failed to parse response: ${err.message}`));
+        }
+      });
+    });
+
+    req.on('error', reject);
+    req.write(body);
+    req.end();
   });
-
-  if (!response.ok) {
-    throw new Error(`GraphQL request failed: ${response.status}`);
-  }
-
-  const result = await response.json();
-  if (result.errors) {
-    throw new Error(result.errors[0].message);
-  }
-
-  return result.data;
 }
 
 // Tool definitions
