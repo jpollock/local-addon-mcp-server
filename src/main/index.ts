@@ -1,19 +1,20 @@
 /**
  * CLI Bridge Addon - Main Process Entry Point
  *
- * This addon extends Local's GraphQL API with additional mutations
- * that are not exposed by default, enabling CLI tools to fully
- * control Local.
- *
- * Specifically, it adds:
- * - deleteSite mutation (not available in core GraphQL API)
- * - wpCli mutation (run WP-CLI commands without terminal setup)
+ * This addon extends Local's capabilities:
+ * - GraphQL mutations for deleteSite, wpCli (for local-cli)
+ * - MCP Server for AI tool integration (Claude Code, ChatGPT, etc.)
  */
 
 import * as LocalMain from '@getflywheel/local/main';
 import gql from 'graphql-tag';
+import { McpServer } from './mcp/McpServer';
+import { MCP_SERVER } from '../common/constants';
+import { LocalServices } from '../common/types';
 
 const ADDON_NAME = 'CLI Bridge';
+
+let mcpServer: McpServer | null = null;
 
 /**
  * GraphQL type definitions for CLI Bridge
@@ -90,7 +91,6 @@ function createResolvers(services: any) {
     try {
       localLogger.info(`[${ADDON_NAME}] Running WP-CLI: wp ${wpArgs.join(' ')}`);
 
-      // Get the site
       const site = siteData.getSite(siteId);
       if (!site) {
         return {
@@ -100,7 +100,6 @@ function createResolvers(services: any) {
         };
       }
 
-      // Check if site is running
       const status = await siteProcessManager.getSiteStatus(site);
       if (status !== 'running') {
         return {
@@ -110,7 +109,6 @@ function createResolvers(services: any) {
         };
       }
 
-      // Run WP-CLI command
       const output = await wpCli.run(site, wpArgs, {
         skipPlugins,
         skipThemes,
@@ -147,7 +145,6 @@ function createResolvers(services: any) {
         try {
           localLogger.info(`[${ADDON_NAME}] Deleting site: ${id}`);
 
-          // Get the site first
           const site = siteData.getSite(id);
           if (!site) {
             return {
@@ -157,7 +154,6 @@ function createResolvers(services: any) {
             };
           }
 
-          // Use the internal deleteSite service
           await deleteSiteService.deleteSite({
             site,
             trashFiles,
@@ -214,6 +210,44 @@ function createResolvers(services: any) {
 }
 
 /**
+ * Start the MCP server
+ */
+async function startMcpServer(services: LocalServices, logger: any): Promise<void> {
+  if (mcpServer) {
+    logger.warn(`[${ADDON_NAME}] MCP server already running`);
+    return;
+  }
+
+  try {
+    mcpServer = new McpServer(
+      { port: MCP_SERVER.DEFAULT_PORT },
+      services,
+      logger
+    );
+
+    await mcpServer.start();
+
+    const info = mcpServer.getConnectionInfo();
+    logger.info(`[${ADDON_NAME}] MCP server started on port ${info.port}`);
+    logger.info(`[${ADDON_NAME}] MCP connection info saved to: ~/Library/Application Support/Local/mcp-connection-info.json`);
+    logger.info(`[${ADDON_NAME}] Available tools: ${info.tools.join(', ')}`);
+  } catch (error: any) {
+    logger.error(`[${ADDON_NAME}] Failed to start MCP server:`, error);
+  }
+}
+
+/**
+ * Stop the MCP server
+ */
+async function stopMcpServer(logger: any): Promise<void> {
+  if (mcpServer) {
+    await mcpServer.stop();
+    mcpServer = null;
+    logger.info(`[${ADDON_NAME}] MCP server stopped`);
+  }
+}
+
+/**
  * Main addon initialization function
  */
 export default function (context: LocalMain.AddonMainContext): void {
@@ -223,11 +257,23 @@ export default function (context: LocalMain.AddonMainContext): void {
   try {
     localLogger.info(`[${ADDON_NAME}] Initializing...`);
 
-    // Register our GraphQL extensions
+    // Register GraphQL extensions (for local-cli)
     const resolvers = createResolvers(services);
     graphql.registerGraphQLService('cli-bridge', typeDefs, resolvers);
-
     localLogger.info(`[${ADDON_NAME}] Registered GraphQL: deleteSite, deleteSites, wpCli, wpCliQuery`);
+
+    // Start MCP server (for AI tools)
+    const localServices: LocalServices = {
+      siteData: services.siteData,
+      siteProcessManager: services.siteProcessManager,
+      wpCli: services.wpCli,
+      deleteSite: services.deleteSite,
+      addSite: services.addSite,
+      localLogger: services.localLogger,
+    };
+
+    startMcpServer(localServices, localLogger);
+
     localLogger.info(`[${ADDON_NAME}] Successfully initialized`);
   } catch (error: any) {
     localLogger.error(`[${ADDON_NAME}] Failed to initialize:`, error);

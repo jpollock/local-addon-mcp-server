@@ -1,0 +1,90 @@
+/**
+ * MCP Server Types
+ */
+
+export interface McpConnectionInfo {
+  url: string;
+  authToken: string;
+  port: number;
+  version: string;
+  tools: string[];
+}
+
+export interface McpServerConfig {
+  port: number;
+  authToken?: string;
+}
+
+export interface McpServerStatus {
+  running: boolean;
+  port: number;
+  uptime: number;
+  error?: string;
+}
+
+export interface McpToolDefinition {
+  name: string;
+  description: string;
+  inputSchema: {
+    type: 'object';
+    properties: Record<string, unknown>;
+    required?: string[];
+  };
+}
+
+export interface McpToolResult {
+  content: Array<{
+    type: 'text';
+    text: string;
+  }>;
+  isError?: boolean;
+}
+
+export interface McpRequest {
+  jsonrpc: '2.0';
+  id: number | string;
+  method: string;
+  params?: {
+    name?: string;
+    arguments?: Record<string, unknown>;
+  };
+}
+
+export interface McpResponse {
+  jsonrpc: '2.0';
+  id: number | string;
+  result?: unknown;
+  error?: {
+    code: number;
+    message: string;
+    data?: unknown;
+  };
+}
+
+export interface LocalServices {
+  siteData: {
+    getSites(): any[];
+    getSite(id: string): any | undefined;
+  };
+  siteProcessManager: {
+    start(site: any): Promise<void>;
+    stop(site: any): Promise<void>;
+    restart(site: any): Promise<void>;
+    getSiteStatus(site: any): Promise<string>;
+  };
+  wpCli: {
+    run(site: any, args: string[], opts?: any): Promise<string | null>;
+  };
+  deleteSite: {
+    deleteSite(opts: { site: any; trashFiles: boolean; updateHosts: boolean }): Promise<void>;
+  };
+  addSite: {
+    // TODO: Add site creation types
+  };
+  localLogger: {
+    info(message: string, ...args: any[]): void;
+    warn(message: string, ...args: any[]): void;
+    error(message: string, ...args: any[]): void;
+    debug(message: string, ...args: any[]): void;
+  };
+}

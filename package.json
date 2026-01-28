@@ -8,11 +8,17 @@
     "build": "tsc",
     "watch": "tsc --watch"
   },
-  "keywords": ["local", "addon", "cli", "graphql"],
+  "keywords": [
+    "local",
+    "addon",
+    "cli",
+    "graphql"
+  ],
   "author": "",
   "license": "MIT",
   "devDependencies": {
     "@getflywheel/local": "^9.0.0",
+    "@types/fs-extra": "^11.0.4",
     "@types/node": "^20.0.0",
     "graphql-tag": "^2.12.6",
     "typescript": "^5.0.0"
