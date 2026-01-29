@@ -1160,8 +1160,8 @@ async function handleTool(name, args) {
       }
 
       const data = await graphqlRequest(`
-        mutation($input: RenameSiteInput!) {
-          renameSite(input: $input) {
+        mutation($input: McpRenameSiteInput!) {
+          mcpRenameSite(input: $input) {
             success
             error
             newName
@@ -1174,7 +1174,7 @@ async function handleTool(name, args) {
         },
       });
 
-      const result = data.renameSite;
+      const result = data.mcpRenameSite;
       if (!result.success) {
         return {
           content: [{ type: 'text', text: `Failed to rename site: ${result.error}` }],

@@ -234,14 +234,14 @@ const typeDefs = gql`
     error: String
   }
 
-  input RenameSiteInput {
+  input McpRenameSiteInput {
     "The site ID"
     siteId: ID!
     "New name for the site"
     newName: String!
   }
 
-  type RenameSiteResult {
+  type McpRenameSiteResult {
     "Whether rename was successful"
     success: Boolean!
     "Error message if failed"
@@ -384,8 +384,8 @@ const typeDefs = gql`
     "Trust site SSL certificate"
     trustSsl(input: TrustSslInput!): TrustSslResult!
 
-    "Rename a site"
-    renameSite(input: RenameSiteInput!): RenameSiteResult!
+    "Rename a site (MCP version)"
+    mcpRenameSite(input: McpRenameSiteInput!): McpRenameSiteResult!
 
     "Change site PHP version"
     changePhpVersion(input: ChangePhpVersionInput!): ChangePhpVersionResult!
@@ -1077,7 +1077,7 @@ function createResolvers(services: any) {
         }
       },
 
-      renameSite: async (_parent: any, args: { input: { siteId: string; newName: string } }) => {
+      mcpRenameSite: async (_parent: any, args: { input: { siteId: string; newName: string } }) => {
         const { siteId, newName } = args.input;
 
         try {
