@@ -1238,16 +1238,20 @@ function createResolvers(services: any) {
         try {
           localLogger.info(`[${ADDON_NAME}] Checking backup status`);
 
-          // Check feature flag
+          // Check if backup service exists (more reliable than feature flag)
+          const hasBackupService = !!backupService;
           const featureEnabled = featureFlagsService?.isFeatureEnabled('localBackups') ?? false;
 
-          if (!featureEnabled) {
+          // Backups are available if either the service exists OR the feature flag is on
+          const backupsAvailable = hasBackupService || featureEnabled;
+
+          if (!backupsAvailable) {
             return {
               available: false,
               featureEnabled: false,
               dropbox: null,
               googleDrive: null,
-              message: 'Cloud Backups feature is not enabled in Local',
+              message: 'Cloud Backups is not available. Install the Cloud Backups add-on from Local Add-ons.',
               error: null,
             };
           }
@@ -1327,15 +1331,15 @@ function createResolvers(services: any) {
             };
           }
 
-          // Check feature flag
-          if (!featureFlagsService?.isFeatureEnabled('localBackups')) {
+          // Check if backup service is available
+          if (!backupService) {
             return {
               success: false,
               siteName: null,
               provider,
               backups: [],
               count: 0,
-              error: 'Cloud Backups feature is not enabled in Local',
+              error: 'Cloud Backups is not available. Install the Cloud Backups add-on from Local Add-ons.',
             };
           }
 
@@ -2732,14 +2736,14 @@ function createResolvers(services: any) {
             };
           }
 
-          // Check feature flag
-          if (!featureFlagsService?.isFeatureEnabled('localBackups')) {
+          // Check if backup service is available
+          if (!backupService) {
             return {
               success: false,
               snapshotId: null,
               timestamp: null,
               message: null,
-              error: 'Cloud Backups feature is not enabled in Local',
+              error: 'Cloud Backups is not available. Install the Cloud Backups add-on from Local Add-ons.',
             };
           }
 
@@ -2842,12 +2846,12 @@ function createResolvers(services: any) {
             };
           }
 
-          // Check feature flag
-          if (!featureFlagsService?.isFeatureEnabled('localBackups')) {
+          // Check if backup service is available
+          if (!backupService) {
             return {
               success: false,
               message: null,
-              error: 'Cloud Backups feature is not enabled in Local',
+              error: 'Cloud Backups is not available. Install the Cloud Backups add-on from Local Add-ons.',
             };
           }
 
@@ -2940,13 +2944,13 @@ function createResolvers(services: any) {
             };
           }
 
-          // Check feature flag
-          if (!featureFlagsService?.isFeatureEnabled('localBackups')) {
+          // Check if backup service is available
+          if (!backupService) {
             return {
               success: false,
               deletedSnapshotId: null,
               message: null,
-              error: 'Cloud Backups feature is not enabled in Local',
+              error: 'Cloud Backups is not available. Install the Cloud Backups add-on from Local Add-ons.',
             };
           }
 
@@ -3035,13 +3039,13 @@ function createResolvers(services: any) {
             };
           }
 
-          // Check feature flag
-          if (!featureFlagsService?.isFeatureEnabled('localBackups')) {
+          // Check if backup service is available
+          if (!backupService) {
             return {
               success: false,
               filePath: null,
               message: null,
-              error: 'Cloud Backups feature is not enabled in Local',
+              error: 'Cloud Backups is not available. Install the Cloud Backups add-on from Local Add-ons.',
             };
           }
 
@@ -3130,13 +3134,13 @@ function createResolvers(services: any) {
             };
           }
 
-          // Check feature flag
-          if (!featureFlagsService?.isFeatureEnabled('localBackups')) {
+          // Check if backup service is available
+          if (!backupService) {
             return {
               success: false,
               snapshotId: null,
               note: null,
-              error: 'Cloud Backups feature is not enabled in Local',
+              error: 'Cloud Backups is not available. Install the Cloud Backups add-on from Local Add-ons.',
             };
           }
 
