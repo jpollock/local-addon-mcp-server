@@ -829,7 +829,7 @@ function createResolvers(services: any) {
     connectHistory: connectHistoryService,
     wpeConnectBase: wpeConnectBaseService,
     // Phase 10: Cloud Backup services
-    backup: backupService,
+    backupService,
     dropbox: dropboxService,
     googleDrive: googleDriveService,
     featureFlags: featureFlagsService,
