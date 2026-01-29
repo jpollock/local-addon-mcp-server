@@ -836,20 +836,88 @@ function createResolvers(services: any) {
     userData,
   } = services;
 
-  // Helper to read cloud storage accounts from userData
-  const getCloudStorageAccounts = (provider: 'dropbox' | 'googleDrive'): Array<{ id: string; email: string }> => {
-    if (!userData) return [];
-    const storageKey = provider === 'dropbox' ? 'dropboxAccounts' : 'googleDriveAccounts';
-    try {
-      const accounts = userData.get({
-        name: storageKey,
-        defaults: [],
-        includeCreatedTime: false,
-        persistDefaults: false,
-        persistDefaultsEncrypted: true,
+  // Helper to invoke IPC calls to the Cloud Backups addon
+  // This uses the same pattern as the BackupAIBridge
+  const invokeBackupIPC = async (channel: string, ...args: any[]): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      const timestamp = Date.now();
+      const random = Math.random().toString(36).substr(2, 9);
+      const successReplyChannel = `${channel}-success-${timestamp}-${random}`;
+      const errorReplyChannel = `${channel}-error-${timestamp}-${random}`;
+
+      const timeout = setTimeout(() => {
+        ipcMain.removeAllListeners(successReplyChannel);
+        ipcMain.removeAllListeners(errorReplyChannel);
+        reject(new Error(`IPC call to ${channel} timed out after 30 seconds`));
+      }, 30000);
+
+      ipcMain.once(successReplyChannel, (_event: any, result: any) => {
+        clearTimeout(timeout);
+        ipcMain.removeAllListeners(errorReplyChannel);
+        localLogger.info(`[${ADDON_NAME}] IPC success from ${channel}`);
+        resolve({ result });
       });
-      return Array.isArray(accounts) ? accounts : [];
-    } catch {
+
+      ipcMain.once(errorReplyChannel, (_event: any, error: any) => {
+        clearTimeout(timeout);
+        ipcMain.removeAllListeners(successReplyChannel);
+        localLogger.error(`[${ADDON_NAME}] IPC error from ${channel}: ${error?.message}`);
+        resolve({ error });
+      });
+
+      const mockEvent = {
+        reply: (replyChannel: string, data: any) => {
+          ipcMain.emit(replyChannel, null, data);
+        },
+        sender: {
+          send: (replyChannel: string, data: any) => {
+            ipcMain.emit(replyChannel, null, data);
+          }
+        }
+      };
+
+      const replyChannels = { successReplyChannel, errorReplyChannel };
+      localLogger.info(`[${ADDON_NAME}] Invoking backup IPC: ${channel}`);
+      ipcMain.emit(channel, mockEvent, replyChannels, ...args);
+    });
+  };
+
+  // Helper to get backup providers from the Cloud Backups addon
+  const getBackupProviders = async (): Promise<Array<{ id: string; name: string }>> => {
+    try {
+      const result = await invokeBackupIPC('backups:enabled-providers');
+      localLogger.info(`[${ADDON_NAME}] Raw IPC result: ${JSON.stringify(result)}`);
+
+      if (result.error) {
+        localLogger.error(`[${ADDON_NAME}] Failed to get backup providers: ${result.error.message}`);
+        return [];
+      }
+
+      // The response is double-nested: result.result.result contains the array
+      // Structure: { result: { result: [providers...] } }
+      let providers: any = result.result;
+
+      // Unwrap nested result if present
+      if (providers && typeof providers === 'object' && !Array.isArray(providers)) {
+        if (Array.isArray(providers.result)) {
+          providers = providers.result;
+        } else if (providers.result && typeof providers.result === 'object') {
+          // Even deeper nesting
+          providers = providers.result;
+        }
+      }
+
+      localLogger.info(`[${ADDON_NAME}] Extracted providers: ${JSON.stringify(providers)}`);
+
+      if (Array.isArray(providers)) {
+        localLogger.info(`[${ADDON_NAME}] Got ${providers.length} backup providers`);
+        return providers;
+      }
+
+      localLogger.warn(`[${ADDON_NAME}] Unexpected providers format after unwrapping: ${typeof providers}`);
+      return [];
+    } catch (error: any) {
+      localLogger.error(`[${ADDON_NAME}] Error getting backup providers: ${error.message}`);
       return [];
     }
   };
@@ -1257,47 +1325,34 @@ function createResolvers(services: any) {
         try {
           localLogger.info(`[${ADDON_NAME}] Checking backup status`);
 
-          // Check if backup service exists (more reliable than feature flag)
-          const hasBackupService = !!backupService;
-          const featureEnabled = featureFlagsService?.isFeatureEnabled('localBackups') ?? false;
+          // Get providers from Cloud Backups addon via IPC
+          const providers = await getBackupProviders();
+          localLogger.info(`[${ADDON_NAME}] Got ${providers.length} backup providers`);
 
-          // Backups are available if either the service exists OR the feature flag is on
-          const backupsAvailable = hasBackupService || featureEnabled;
-
-          if (!backupsAvailable) {
+          if (providers.length === 0) {
             return {
               available: false,
               featureEnabled: false,
               dropbox: null,
               googleDrive: null,
-              message: 'Cloud Backups is not available. Install the Cloud Backups add-on from Local Add-ons.',
+              message: 'No cloud storage providers configured. Connect Google Drive or Dropbox in Local Hub (hub.localwp.com/addons/cloud-backups).',
               error: null,
             };
           }
 
-          // Check Dropbox authentication using userData
-          let dropboxStatus = { authenticated: false, accountId: null as string | null, email: null as string | null };
-          const dropboxAccounts = getCloudStorageAccounts('dropbox');
-          if (dropboxAccounts.length > 0) {
-            dropboxStatus = {
-              authenticated: true,
-              accountId: dropboxAccounts[0].id,
-              email: dropboxAccounts[0].email,
-            };
-          }
+          // Map provider info to our response format
+          const dropboxProvider = providers.find((p: any) => p.id === 'dropbox' || p.name?.toLowerCase().includes('dropbox')) as any;
+          const googleProvider = providers.find((p: any) => p.id === 'google' || p.name?.toLowerCase().includes('google')) as any;
 
-          // Check Google Drive authentication using userData
-          let googleDriveStatus = { authenticated: false, accountId: null as string | null, email: null as string | null };
-          const googleDriveAccounts = getCloudStorageAccounts('googleDrive');
-          if (googleDriveAccounts.length > 0) {
-            googleDriveStatus = {
-              authenticated: true,
-              accountId: googleDriveAccounts[0].id,
-              email: googleDriveAccounts[0].email,
-            };
-          }
+          const dropboxStatus = dropboxProvider
+            ? { authenticated: true, accountId: dropboxProvider.id, email: dropboxProvider.email || null }
+            : { authenticated: false, accountId: null as string | null, email: null as string | null };
 
-          const hasProvider = dropboxStatus.authenticated || googleDriveStatus.authenticated;
+          const googleDriveStatus = googleProvider
+            ? { authenticated: true, accountId: googleProvider.id, email: googleProvider.email || null }
+            : { authenticated: false, accountId: null as string | null, email: null as string | null };
+
+          const hasProvider = providers.length > 0;
 
           return {
             available: hasProvider,
@@ -1326,30 +1381,6 @@ function createResolvers(services: any) {
         try {
           localLogger.info(`[${ADDON_NAME}] Listing backups for site ${siteId} from ${provider}`);
 
-          // Validate provider
-          if (provider !== 'dropbox' && provider !== 'googleDrive') {
-            return {
-              success: false,
-              siteName: null,
-              provider,
-              backups: [],
-              count: 0,
-              error: `Invalid provider: ${provider}. Use 'dropbox' or 'googleDrive'.`,
-            };
-          }
-
-          // Check if backup service is available
-          if (!backupService) {
-            return {
-              success: false,
-              siteName: null,
-              provider,
-              backups: [],
-              count: 0,
-              error: 'Cloud Backups is not available. Install the Cloud Backups add-on from Local Add-ons.',
-            };
-          }
-
           // Get site
           const site = siteData.getSite(siteId);
           if (!site) {
@@ -1363,50 +1394,80 @@ function createResolvers(services: any) {
             };
           }
 
-          // Check if backup service is available
-          if (!backupService) {
+          // Get providers from Cloud Backups addon
+          const providers = await getBackupProviders();
+          if (providers.length === 0) {
             return {
               success: false,
               siteName: site.name,
               provider,
               backups: [],
               count: 0,
-              error: 'Backup service not available',
+              error: 'No cloud storage providers configured. Connect Google Drive or Dropbox in Local Hub.',
             };
           }
 
-          // Get account ID for provider using userData
-          const accounts = getCloudStorageAccounts(provider as 'dropbox' | 'googleDrive');
-          if (accounts.length === 0) {
+          // Find the matching provider (map 'googleDrive' to 'google' for the addon)
+          const providerMap: Record<string, string> = { googleDrive: 'google', dropbox: 'dropbox' };
+          const providerId = providerMap[provider] || provider;
+          const matchedProvider = providers.find((p: any) => p.id === providerId);
+
+          if (!matchedProvider) {
             return {
               success: false,
               siteName: site.name,
               provider,
               backups: [],
               count: 0,
-              error: `Not authenticated with ${provider}. Connect it in Local's Cloud Backups settings.`,
+              error: `Provider '${provider}' not configured. Available: ${providers.map((p: any) => p.name).join(', ')}`,
             };
           }
 
-          const accountId = accounts[0].id;
+          // For listing snapshots, use the Hub provider ID directly (e.g., 'google')
+          // NOT the rclone backend name ('drive') - the Hub queries expect the OAuth provider name
+          // Also pass pageOffset parameter (0 for first page)
+          const result = await invokeBackupIPC('backups:provider-snapshots', siteId, matchedProvider.id, 0);
+          localLogger.info(`[${ADDON_NAME}] Provider snapshots raw result: ${JSON.stringify(result)}`);
 
-          // List backups
-          const backups = await backupService.listBackups({
-            site,
-            provider: provider as 'dropbox' | 'googleDrive',
-            accountId,
-          });
+          if (result.error) {
+            return {
+              success: false,
+              siteName: site.name,
+              provider,
+              backups: [],
+              count: 0,
+              error: result.error.message || 'Failed to list backups',
+            };
+          }
+
+          // Unwrap nested result structure (similar to providers)
+          let backupsData = result.result;
+          if (backupsData && typeof backupsData === 'object' && !Array.isArray(backupsData)) {
+            // Check for nested result or snapshots array
+            if (Array.isArray(backupsData.result)) {
+              backupsData = backupsData.result;
+            } else if (Array.isArray(backupsData.snapshots)) {
+              backupsData = backupsData.snapshots;
+            } else if (backupsData.result && Array.isArray(backupsData.result.snapshots)) {
+              backupsData = backupsData.result.snapshots;
+            }
+          }
+
+          const backups = Array.isArray(backupsData) ? backupsData : [];
+          localLogger.info(`[${ADDON_NAME}] Extracted ${backups.length} backups`);
 
           return {
             success: true,
             siteName: site.name,
             provider,
             backups: backups.map((b: any) => ({
-              snapshotId: b.snapshotId,
-              timestamp: b.timestamp,
-              note: b.note,
-              siteDomain: b.siteDomain,
-              services: JSON.stringify(b.services || {}),
+              // Use hash for snapshotId as that's what restic uses for restore/delete operations
+              // The Hub ID (b.id) is just a database identifier
+              snapshotId: b.hash || b.snapshotId || b.short_id,
+              timestamp: b.updatedAt || b.createdAt || b.timestamp || b.time || b.created,
+              note: b.configObject?.description || b.note || b.description || b.tags?.description || '',
+              siteDomain: b.configObject?.name ? `${b.configObject.name}.local` : (b.siteDomain || site.domain),
+              services: JSON.stringify(b.configObject?.services || b.services || {}),
             })),
             count: backups.length,
             error: null,
@@ -2720,28 +2781,6 @@ function createResolvers(services: any) {
         try {
           localLogger.info(`[${ADDON_NAME}] Creating backup for site ${siteId} to ${provider}`);
 
-          // Validate provider
-          if (provider !== 'dropbox' && provider !== 'googleDrive') {
-            return {
-              success: false,
-              snapshotId: null,
-              timestamp: null,
-              message: null,
-              error: `Invalid provider: ${provider}. Use 'dropbox' or 'googleDrive'.`,
-            };
-          }
-
-          // Check if backup service is available
-          if (!backupService) {
-            return {
-              success: false,
-              snapshotId: null,
-              timestamp: null,
-              message: null,
-              error: 'Cloud Backups is not available. Install the Cloud Backups add-on from Local Add-ons.',
-            };
-          }
-
           // Get site
           const site = siteData.getSite(siteId);
           if (!site) {
@@ -2754,45 +2793,83 @@ function createResolvers(services: any) {
             };
           }
 
-          // Check if backup service is available
-          if (!backupService) {
+          // Get providers from Cloud Backups addon
+          const providers = await getBackupProviders();
+          if (providers.length === 0) {
             return {
               success: false,
               snapshotId: null,
               timestamp: null,
               message: null,
-              error: 'Backup service not available',
+              error: 'No cloud storage providers configured. Connect Google Drive or Dropbox in Local Hub.',
             };
           }
 
-          // Get account ID for provider
-          // Get account ID for provider using userData
-          const accounts = getCloudStorageAccounts(provider as 'dropbox' | 'googleDrive');
-          if (accounts.length === 0) {
+          // Find the matching provider (map 'googleDrive' to 'google' for the addon)
+          const providerMap: Record<string, string> = { googleDrive: 'google', dropbox: 'dropbox' };
+          const providerId = providerMap[provider] || provider;
+          const matchedProvider = providers.find((p: any) => p.id === providerId);
+
+          if (!matchedProvider) {
             return {
               success: false,
               snapshotId: null,
               timestamp: null,
               message: null,
-              error: `Not authenticated with ${provider}. Connect it in Local's Cloud Backups settings.`,
+              error: `Provider '${provider}' not configured. Available: ${providers.map((p: any) => p.name).join(', ')}`,
             };
           }
 
-          const accountId = accounts[0].id;
+          // Map the Hub provider ID to rclone backend name
+          // The addon uses 'google' in enabled-providers but expects 'drive' for backup operations
+          const backupProviderMap: Record<string, string> = { google: 'drive', dropbox: 'dropbox' };
+          const backupProviderId = backupProviderMap[matchedProvider.id] || matchedProvider.id;
+          localLogger.info(`[${ADDON_NAME}] Using backup provider ID: ${backupProviderId} (from ${matchedProvider.id})`);
 
-          // Create backup
-          const result = await backupService.createBackup({
-            site,
-            provider: provider as 'dropbox' | 'googleDrive',
-            accountId,
-            note,
-          });
+          // Create backup via IPC
+          const description = note || 'Backup created via MCP';
+          const result = await invokeBackupIPC('backups:backup-site', siteId, backupProviderId, description);
+          localLogger.info(`[${ADDON_NAME}] Backup IPC result: ${JSON.stringify(result)}`);
 
+          // Check for top-level IPC error
+          if (result.error) {
+            return {
+              success: false,
+              snapshotId: null,
+              timestamp: null,
+              message: null,
+              error: result.error.message || 'Backup creation failed',
+            };
+          }
+
+          // Unwrap nested result structure - the actual result is at result.result
+          const backupResult = result.result;
+
+          // Check if the backup result contains an error (nested at result.result.error)
+          if (backupResult?.error) {
+            const errorMsg = backupResult.error.message || backupResult.error.original?.message || 'Backup failed';
+            return {
+              success: false,
+              snapshotId: null,
+              timestamp: null,
+              message: null,
+              error: errorMsg,
+            };
+          }
+
+          // Try to extract snapshot ID (may be nested in result.result.result)
+          let snapshotId = backupResult?.snapshotId || backupResult?.id;
+          if (!snapshotId && backupResult?.result) {
+            snapshotId = backupResult.result.snapshotId || backupResult.result.id;
+          }
+
+          // If no error was returned, the backup succeeded even if no snapshot ID is provided
+          // The addon doesn't always return the snapshot ID in its IPC response
           return {
             success: true,
-            snapshotId: result.snapshotId,
-            timestamp: result.timestamp,
-            message: 'Backup created successfully',
+            snapshotId: snapshotId || null,
+            timestamp: new Date().toISOString(),
+            message: `Backup created successfully to ${matchedProvider.name}`,
             error: null,
           };
         } catch (error: any) {
@@ -2822,24 +2899,6 @@ function createResolvers(services: any) {
             };
           }
 
-          // Validate provider
-          if (provider !== 'dropbox' && provider !== 'googleDrive') {
-            return {
-              success: false,
-              message: null,
-              error: `Invalid provider: ${provider}. Use 'dropbox' or 'googleDrive'.`,
-            };
-          }
-
-          // Check if backup service is available
-          if (!backupService) {
-            return {
-              success: false,
-              message: null,
-              error: 'Cloud Backups is not available. Install the Cloud Backups add-on from Local Add-ons.',
-            };
-          }
-
           // Get site
           const site = siteData.getSite(siteId);
           if (!site) {
@@ -2850,34 +2909,47 @@ function createResolvers(services: any) {
             };
           }
 
-          // Check if backup service is available
-          if (!backupService) {
+          // Get providers from Cloud Backups addon
+          const providers = await getBackupProviders();
+          if (providers.length === 0) {
             return {
               success: false,
               message: null,
-              error: 'Backup service not available',
+              error: 'No cloud storage providers configured. Connect Google Drive or Dropbox in Local Hub.',
             };
           }
 
-          // Get account ID for provider using userData
-          const accounts = getCloudStorageAccounts(provider as 'dropbox' | 'googleDrive');
-          if (accounts.length === 0) {
+          // Find the matching provider (map 'googleDrive' to 'google' for the addon)
+          const providerMap: Record<string, string> = { googleDrive: 'google', dropbox: 'dropbox' };
+          const providerId = providerMap[provider] || provider;
+          const matchedProvider = providers.find((p: any) => p.id === providerId);
+
+          if (!matchedProvider) {
             return {
               success: false,
               message: null,
-              error: `Not authenticated with ${provider}. Connect it in Local's Cloud Backups settings.`,
+              error: `Provider '${provider}' not configured. Available: ${providers.map((p: any) => p.name).join(', ')}`,
             };
           }
 
-          const accountId = accounts[0].id;
+          // Map the Hub provider ID to rclone backend name
+          const backupProviderMap: Record<string, string> = { google: 'drive', dropbox: 'dropbox' };
+          const backupProviderId = backupProviderMap[matchedProvider.id] || matchedProvider.id;
 
-          // Restore backup
-          await backupService.restoreBackup({
-            site,
-            provider: provider as 'dropbox' | 'googleDrive',
-            accountId,
-            snapshotId,
-          });
+          // Restore backup via IPC
+          const result = await invokeBackupIPC('backups:restore-backup', siteId, backupProviderId, snapshotId);
+          localLogger.info(`[${ADDON_NAME}] Restore result: ${JSON.stringify(result)}`);
+
+          // Check for errors - can be at result.error or result.result.error (IPC async pattern)
+          const ipcError = result.error || result.result?.error;
+          if (ipcError) {
+            const errorMessage = typeof ipcError === 'string' ? ipcError : (ipcError.message || 'Restore failed');
+            return {
+              success: false,
+              message: null,
+              error: errorMessage,
+            };
+          }
 
           return {
             success: true,
@@ -2910,26 +2982,6 @@ function createResolvers(services: any) {
             };
           }
 
-          // Validate provider
-          if (provider !== 'dropbox' && provider !== 'googleDrive') {
-            return {
-              success: false,
-              deletedSnapshotId: null,
-              message: null,
-              error: `Invalid provider: ${provider}. Use 'dropbox' or 'googleDrive'.`,
-            };
-          }
-
-          // Check if backup service is available
-          if (!backupService) {
-            return {
-              success: false,
-              deletedSnapshotId: null,
-              message: null,
-              error: 'Cloud Backups is not available. Install the Cloud Backups add-on from Local Add-ons.',
-            };
-          }
-
           // Get site
           const site = siteData.getSite(siteId);
           if (!site) {
@@ -2941,36 +2993,55 @@ function createResolvers(services: any) {
             };
           }
 
-          // Check if backup service is available
-          if (!backupService) {
+          // Get providers from Cloud Backups addon
+          const providers = await getBackupProviders();
+          if (providers.length === 0) {
             return {
               success: false,
               deletedSnapshotId: null,
               message: null,
-              error: 'Backup service not available',
+              error: 'No cloud storage providers configured. Connect Google Drive or Dropbox in Local Hub.',
             };
           }
 
-          // Get account ID for provider using userData
-          const accounts = getCloudStorageAccounts(provider as 'dropbox' | 'googleDrive');
-          if (accounts.length === 0) {
+          // Find the matching provider (map 'googleDrive' to 'google' for the addon)
+          const providerMap: Record<string, string> = { googleDrive: 'google', dropbox: 'dropbox' };
+          const providerId = providerMap[provider] || provider;
+          const matchedProvider = providers.find((p: any) => p.id === providerId);
+
+          if (!matchedProvider) {
             return {
               success: false,
               deletedSnapshotId: null,
               message: null,
-              error: `Not authenticated with ${provider}. Connect it in Local's Cloud Backups settings.`,
+              error: `Provider '${provider}' not configured. Available: ${providers.map((p: any) => p.name).join(', ')}`,
             };
           }
 
-          const accountId = accounts[0].id;
+          // Map the Hub provider ID to rclone backend name
+          const backupProviderMap: Record<string, string> = { google: 'drive', dropbox: 'dropbox' };
+          const backupProviderId = backupProviderMap[matchedProvider.id] || matchedProvider.id;
 
-          // Delete backup
-          await backupService.deleteBackup({
-            site,
-            provider: provider as 'dropbox' | 'googleDrive',
-            accountId,
-            snapshotId,
-          });
+          // Try to delete backup via IPC (may not be supported by the addon)
+          const result = await invokeBackupIPC('backups:delete-backup', siteId, backupProviderId, snapshotId);
+
+          if (result.error) {
+            // If the IPC channel doesn't exist or isn't supported, provide helpful message
+            if (result.error.message?.includes('timed out')) {
+              return {
+                success: false,
+                deletedSnapshotId: null,
+                message: null,
+                error: 'Delete backup operation is not available via MCP. Please delete backups through the Local UI.',
+              };
+            }
+            return {
+              success: false,
+              deletedSnapshotId: null,
+              message: null,
+              error: result.error.message || 'Delete failed',
+            };
+          }
 
           return {
             success: true,
@@ -2995,26 +3066,6 @@ function createResolvers(services: any) {
         try {
           localLogger.info(`[${ADDON_NAME}] Downloading backup ${snapshotId} for site ${siteId}`);
 
-          // Validate provider
-          if (provider !== 'dropbox' && provider !== 'googleDrive') {
-            return {
-              success: false,
-              filePath: null,
-              message: null,
-              error: `Invalid provider: ${provider}. Use 'dropbox' or 'googleDrive'.`,
-            };
-          }
-
-          // Check if backup service is available
-          if (!backupService) {
-            return {
-              success: false,
-              filePath: null,
-              message: null,
-              error: 'Cloud Backups is not available. Install the Cloud Backups add-on from Local Add-ons.',
-            };
-          }
-
           // Get site
           const site = siteData.getSite(siteId);
           if (!site) {
@@ -3026,40 +3077,59 @@ function createResolvers(services: any) {
             };
           }
 
-          // Check if backup service is available
-          if (!backupService) {
+          // Get providers from Cloud Backups addon
+          const providers = await getBackupProviders();
+          if (providers.length === 0) {
             return {
               success: false,
               filePath: null,
               message: null,
-              error: 'Backup service not available',
+              error: 'No cloud storage providers configured. Connect Google Drive or Dropbox in Local Hub.',
             };
           }
 
-          // Get account ID for provider using userData
-          const accounts = getCloudStorageAccounts(provider as 'dropbox' | 'googleDrive');
-          if (accounts.length === 0) {
+          // Find the matching provider (map 'googleDrive' to 'google' for the addon)
+          const providerMap: Record<string, string> = { googleDrive: 'google', dropbox: 'dropbox' };
+          const providerId = providerMap[provider] || provider;
+          const matchedProvider = providers.find((p: any) => p.id === providerId);
+
+          if (!matchedProvider) {
             return {
               success: false,
               filePath: null,
               message: null,
-              error: `Not authenticated with ${provider}. Connect it in Local's Cloud Backups settings.`,
+              error: `Provider '${provider}' not configured. Available: ${providers.map((p: any) => p.name).join(', ')}`,
             };
           }
 
-          const accountId = accounts[0].id;
+          // Map the Hub provider ID to rclone backend name
+          const backupProviderMap: Record<string, string> = { google: 'drive', dropbox: 'dropbox' };
+          const backupProviderId = backupProviderMap[matchedProvider.id] || matchedProvider.id;
 
-          // Download backup
-          const filePath = await backupService.downloadZip({
-            site,
-            provider: provider as 'dropbox' | 'googleDrive',
-            accountId,
-            snapshotId,
-          });
+          // Try to download backup via IPC (may not be supported by the addon)
+          const result = await invokeBackupIPC('backups:download-backup', siteId, backupProviderId, snapshotId);
+
+          if (result.error) {
+            // If the IPC channel doesn't exist or isn't supported, provide helpful message
+            if (result.error.message?.includes('timed out')) {
+              return {
+                success: false,
+                filePath: null,
+                message: null,
+                error: 'Download backup operation is not available via MCP. Please download backups through the Local UI.',
+              };
+            }
+            return {
+              success: false,
+              filePath: null,
+              message: null,
+              error: result.error.message || 'Download failed',
+            };
+          }
 
           return {
             success: true,
-            filePath,
+            filePath: result.result?.filePath || null,
             message: 'Backup downloaded to Downloads folder',
             error: null,
           };
@@ -3080,26 +3150,6 @@ function createResolvers(services: any) {
         try {
           localLogger.info(`[${ADDON_NAME}] Editing backup note for ${snapshotId}`);
 
-          // Validate provider
-          if (provider !== 'dropbox' && provider !== 'googleDrive') {
-            return {
-              success: false,
-              snapshotId: null,
-              note: null,
-              error: `Invalid provider: ${provider}. Use 'dropbox' or 'googleDrive'.`,
-            };
-          }
-
-          // Check if backup service is available
-          if (!backupService) {
-            return {
-              success: false,
-              snapshotId: null,
-              note: null,
-              error: 'Cloud Backups is not available. Install the Cloud Backups add-on from Local Add-ons.',
-            };
-          }
-
           // Get site
           const site = siteData.getSite(siteId);
           if (!site) {
@@ -3111,37 +3161,55 @@ function createResolvers(services: any) {
             };
           }
 
-          // Check if backup service is available
-          if (!backupService) {
+          // Get providers from Cloud Backups addon
+          const providers = await getBackupProviders();
+          if (providers.length === 0) {
             return {
               success: false,
               snapshotId: null,
               note: null,
-              error: 'Backup service not available',
+              error: 'No cloud storage providers configured. Connect Google Drive or Dropbox in Local Hub.',
             };
           }
 
-          // Get account ID for provider using userData
-          const accounts = getCloudStorageAccounts(provider as 'dropbox' | 'googleDrive');
-          if (accounts.length === 0) {
+          // Find the matching provider (map 'googleDrive' to 'google' for the addon)
+          const providerMap: Record<string, string> = { googleDrive: 'google', dropbox: 'dropbox' };
+          const providerId = providerMap[provider] || provider;
+          const matchedProvider = providers.find((p: any) => p.id === providerId);
+
+          if (!matchedProvider) {
             return {
               success: false,
               snapshotId: null,
               note: null,
-              error: `Not authenticated with ${provider}. Connect it in Local's Cloud Backups settings.`,
+              error: `Provider '${provider}' not configured. Available: ${providers.map((p: any) => p.name).join(', ')}`,
             };
           }
 
-          const accountId = accounts[0].id;
+          // Map the Hub provider ID to rclone backend name
+          const backupProviderMap: Record<string, string> = { google: 'drive', dropbox: 'dropbox' };
+          const backupProviderId = backupProviderMap[matchedProvider.id] || matchedProvider.id;
 
-          // Edit backup description
-          await backupService.editBackupDescription({
-            site,
-            provider: provider as 'dropbox' | 'googleDrive',
-            accountId,
-            snapshotId,
-            newDescription: note,
-          });
+          // Try to edit backup note via IPC (may not be supported by the addon)
+          const result = await invokeBackupIPC('backups:edit-note', siteId, backupProviderId, snapshotId, note);
+
+          if (result.error) {
+            // If the IPC channel doesn't exist or isn't supported, provide helpful message
+            if (result.error.message?.includes('timed out')) {
+              return {
+                success: false,
+                snapshotId: null,
+                note: null,
+                error: 'Edit backup note operation is not available via MCP. Please edit backup notes through the Local UI.',
+              };
+            }
+            return {
+              success: false,
+              snapshotId: null,
+              note: null,
+              error: result.error.message || 'Edit note failed',
+            };
+          }
 
           return {
             success: true,
