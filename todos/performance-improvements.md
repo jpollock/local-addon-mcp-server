@@ -110,7 +110,7 @@ MEDIUM - Prevents indefinite hangs
 ---
 
 ## Status
-- [ ] Use getInstall() for single lookups
-- [ ] Add CAPI response caching (optional)
-- [ ] Convert sync file reads to async
-- [ ] Add timeout handling for long operations
+- [ ] Use getInstall() for single lookups (LOW priority)
+- [ ] Add CAPI response caching (optional, LOW priority)
+- [x] Convert sync file reads to async (done: 2024-01-29)
+- [x] Add timeout handling for long operations (done: 2024-01-29)

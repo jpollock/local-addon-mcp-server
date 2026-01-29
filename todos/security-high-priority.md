@@ -78,5 +78,5 @@ HIGH - Prevents command injection attacks
 ---
 
 ## Status
-- [ ] HIGH-1: Add confirm to pull_from_wpe
-- [ ] HIGH-2: Implement WP-CLI command blocklist
+- [x] HIGH-1: Add confirm to pull_from_wpe (done: 2024-01-29)
+- [x] HIGH-2: Implement WP-CLI command blocklist (done: 2024-01-29)

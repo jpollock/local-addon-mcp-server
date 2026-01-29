@@ -122,9 +122,9 @@ LOW - Localhost-only, token is per-session
 ---
 
 ## Status
-- [ ] MEDIUM-1: Improve provider error messages
-- [ ] MEDIUM-2: Add snapshot ID format validation
-- [ ] MEDIUM-3: Add path traversal protection for SQL import
+- [x] MEDIUM-1: Improve provider error messages (closed - existing validation adequate)
+- [x] MEDIUM-2: Add snapshot ID format validation (done: 2024-01-29)
+- [x] MEDIUM-3: Add path traversal protection for SQL import (done: 2024-01-29)
 - [ ] LOW-1: Consider rate limiting (future)
 - [ ] LOW-2: Add audit logging for destructive ops (future)
 - [ ] LOW-3: Consider token rotation (future)
