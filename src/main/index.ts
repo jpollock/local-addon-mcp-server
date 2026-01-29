@@ -928,6 +928,16 @@ function createResolvers(services: any) {
             };
           }
 
+          // Check if site is running - database must be accessible
+          const status = await siteProcessManager.getSiteStatus(site);
+          if (status !== 'running') {
+            return {
+              success: false,
+              error: `Site "${site.name}" must be running to export database. Start it first.`,
+              outputPath: null,
+            };
+          }
+
           // Default to Downloads folder with site name
           const defaultPath = pathModule.join(
             os.homedir(),
@@ -989,6 +999,15 @@ function createResolvers(services: any) {
             };
           }
 
+          // Check if site is running - database must be accessible
+          const status = await siteProcessManager.getSiteStatus(site);
+          if (status !== 'running') {
+            return {
+              success: false,
+              error: `Site "${site.name}" must be running to import database. Start it first.`,
+            };
+          }
+
           localLogger.info(`[${ADDON_NAME}] Importing database for ${site.name} from ${sqlPath}`);
 
           // Use importSQLFile service which properly sets up MySQL environment
@@ -1025,6 +1044,15 @@ function createResolvers(services: any) {
             return {
               success: false,
               error: `Site not found: ${siteId}`,
+            };
+          }
+
+          // Check if site is running - database must be accessible
+          const status = await siteProcessManager.getSiteStatus(site);
+          if (status !== 'running') {
+            return {
+              success: false,
+              error: `Site "${site.name}" must be running to open Adminer. Start it first.`,
             };
           }
 
