@@ -23,10 +23,12 @@ The [Model Context Protocol](https://modelcontextprotocol.io/) is an open standa
 
 ## Features
 
-- **Dual Transport Support**: Both stdio (for Claude Code) and SSE (for web-based tools)
-- **24 MCP Tools**: Complete site lifecycle and development workflow
-- **Secure**: Token-based authentication for SSE transport
-- **Dark Mode**: Seamless integration with Local's theme
+- **40 MCP Tools**: Complete site management, WP-CLI, database, cloud backups, and WP Engine sync
+- **Dual Transport**: stdio for Claude Code, SSE for web-based AI tools
+- **Cloud Backups**: Backup and restore to Dropbox or Google Drive
+- **WP Engine Connect**: Push and pull sites to/from WP Engine hosting
+- **Auto-Start Sites**: Tools automatically start sites when needed
+- **Security Hardened**: Input validation, command blocklists, confirmation requirements
 
 ## Quick Start
 
@@ -60,6 +62,7 @@ Add to your Claude Code MCP settings:
 ## Available Tools
 
 ### Site Management
+
 | Tool | Description |
 |------|-------------|
 | `list_sites` | List all WordPress sites |
@@ -74,6 +77,7 @@ Add to your Claude Code MCP settings:
 | `open_site` | Open site in browser |
 
 ### Import/Export
+
 | Tool | Description |
 |------|-------------|
 | `export_site` | Export site to a zip file |
@@ -82,6 +86,7 @@ Add to your Claude Code MCP settings:
 | `import_database` | Import SQL file into database |
 
 ### Development Tools
+
 | Tool | Description |
 |------|-------------|
 | `wp_cli` | Run WP-CLI commands |
@@ -93,11 +98,38 @@ Add to your Claude Code MCP settings:
 | `list_services` | List available service versions |
 
 ### Blueprints & System
+
 | Tool | Description |
 |------|-------------|
 | `list_blueprints` | List available blueprints |
 | `save_blueprint` | Save site as blueprint |
 | `get_local_info` | Get Local application info |
+
+### Cloud Backups
+
+| Tool | Description |
+|------|-------------|
+| `backup_status` | Check cloud backup availability |
+| `list_backups` | List backups from Dropbox/Google Drive |
+| `create_backup` | Create backup to cloud storage |
+| `restore_backup` | Restore from cloud backup |
+| `delete_backup` | Delete a cloud backup |
+| `download_backup` | Download backup as ZIP |
+| `edit_backup_note` | Update backup description |
+
+### WP Engine Connect
+
+| Tool | Description |
+|------|-------------|
+| `wpe_status` | Check WP Engine auth status |
+| `wpe_authenticate` | Start OAuth authentication |
+| `wpe_logout` | Clear WP Engine tokens |
+| `list_wpe_sites` | List WP Engine sites |
+| `get_wpe_link` | Get site's WPE connection info |
+| `push_to_wpe` | Push local changes to WPE |
+| `pull_from_wpe` | Pull changes from WPE |
+| `get_sync_history` | Get push/pull history |
+| `get_site_changes` | Preview file changes |
 
 ## Requirements
 
