@@ -1,7 +1,7 @@
 {
   "name": "@local-labs/local-addon-mcp-server",
   "productName": "MCP Server",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "MCP (Model Context Protocol) server for Local, enabling AI tools like Claude Code to manage WordPress development sites",
   "main": "lib/main/index.js",
   "renderer": "lib/renderer/index.js",

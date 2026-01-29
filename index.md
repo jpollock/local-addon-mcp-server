@@ -17,13 +17,14 @@ The [Model Context Protocol](https://modelcontextprotocol.io/) is an open standa
 - List, start, stop, and restart WordPress sites
 - Create, clone, and delete sites
 - Run WP-CLI commands
-- Manage blueprints
-- Export sites
+- Manage blueprints and exports
+- Import/export databases
+- Change PHP versions and trust SSL certificates
 
 ## Features
 
 - **Dual Transport Support**: Both stdio (for Claude Code) and SSE (for web-based tools)
-- **14 MCP Tools**: Complete site lifecycle management
+- **21 MCP Tools**: Complete site lifecycle and development workflow
 - **Secure**: Token-based authentication for SSE transport
 - **Dark Mode**: Seamless integration with Local's theme
 
@@ -58,6 +59,7 @@ Add to your Claude Code MCP settings:
 
 ## Available Tools
 
+### Site Management
 | Tool | Description |
 |------|-------------|
 | `list_sites` | List all WordPress sites |
@@ -68,9 +70,28 @@ Add to your Claude Code MCP settings:
 | `create_site` | Create a new WordPress site |
 | `delete_site` | Delete a site |
 | `clone_site` | Clone an existing site |
-| `export_site` | Export site to a zip file |
+| `rename_site` | Rename a site |
 | `open_site` | Open site in browser |
+
+### Import/Export
+| Tool | Description |
+|------|-------------|
+| `export_site` | Export site to a zip file |
+| `import_site` | Import site from a zip file |
+| `export_database` | Export database to SQL file |
+| `import_database` | Import SQL file into database |
+
+### Development Tools
+| Tool | Description |
+|------|-------------|
 | `wp_cli` | Run WP-CLI commands |
+| `open_adminer` | Open Adminer database UI |
+| `change_php_version` | Change site PHP version |
+| `trust_ssl` | Trust site SSL certificate |
+
+### Blueprints & System
+| Tool | Description |
+|------|-------------|
 | `list_blueprints` | List available blueprints |
 | `save_blueprint` | Save site as blueprint |
 | `get_local_info` | Get Local application info |

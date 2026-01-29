@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.2] - 2026-01-28
+
+### Added
+- **Phase 8: WordPress Development Tools (7 new tools):**
+  - `export_database` - Export site database to SQL file
+  - `import_database` - Import SQL file into site database
+  - `open_adminer` - Open Adminer database management UI
+  - `trust_ssl` - Trust site SSL certificate
+  - `rename_site` - Rename a WordPress site
+  - `change_php_version` - Change site PHP version
+  - `import_site` - Import site from zip file
+- Phase 8 test suite with 17 new test cases
+- Updated USER-GUIDE with database and configuration tools
+
+### Changed
+- Total tools increased from 14 to 21
+
 ## [0.0.1] - 2026-01-28
 
 ### Added

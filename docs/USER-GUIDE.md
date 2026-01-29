@@ -186,6 +186,92 @@ Get information about the Local application.
 What version of Local am I running?
 ```
 
+## Database Tools
+
+### export_database
+Export a site's database to a SQL file.
+
+**Parameters:**
+- `site` (required): Site name or ID
+- `outputPath` (optional): Output file path (defaults to ~/Downloads/<site-name>.sql)
+
+**Example:**
+```
+Export the database for my-blog to a SQL file
+```
+
+### import_database
+Import a SQL file into a site's database.
+
+**Parameters:**
+- `site` (required): Site name or ID
+- `sqlPath` (required): Path to the SQL file to import
+
+**Example:**
+```
+Import /path/to/backup.sql into my-blog's database
+```
+
+### open_adminer
+Open Adminer database management UI for a site.
+
+**Parameters:**
+- `site` (required): Site name or ID
+
+**Example:**
+```
+Open the database admin for my-blog
+```
+
+## Site Configuration Tools
+
+### rename_site
+Rename a WordPress site.
+
+**Parameters:**
+- `site` (required): Current site name or ID
+- `newName` (required): New name for the site
+
+**Example:**
+```
+Rename my-blog to my-awesome-blog
+```
+
+### change_php_version
+Change the PHP version for a site.
+
+**Parameters:**
+- `site` (required): Site name or ID
+- `phpVersion` (required): Target PHP version (e.g., "8.2.10", "8.1.27")
+
+**Example:**
+```
+Change my-blog to use PHP 8.2.10
+```
+
+### trust_ssl
+Trust the SSL certificate for a site (may require admin password).
+
+**Parameters:**
+- `site` (required): Site name or ID
+
+**Example:**
+```
+Trust the SSL certificate for my-blog
+```
+
+### import_site
+Import a WordPress site from a zip file.
+
+**Parameters:**
+- `zipPath` (required): Path to the zip file to import
+- `siteName` (optional): Name for the imported site
+
+**Example:**
+```
+Import the site from /path/to/export.zip
+```
+
 ## Troubleshooting
 
 ### Connection Refused

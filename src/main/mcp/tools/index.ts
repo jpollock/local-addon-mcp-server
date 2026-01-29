@@ -18,6 +18,14 @@ import { cloneSite, cloneSiteDefinition } from './cloneSite';
 import { exportSite, exportSiteDefinition } from './exportSite';
 import { listBlueprints, listBlueprintsDefinition } from './listBlueprints';
 import { saveBlueprint, saveBlueprintDefinition } from './saveBlueprint';
+// Phase 8: WordPress Development Tools
+import { exportDatabase, exportDatabaseDefinition } from './exportDatabase';
+import { importDatabase, importDatabaseDefinition } from './importDatabase';
+import { openAdminer, openAdminerDefinition } from './openAdminer';
+import { trustSsl, trustSslDefinition } from './trustSsl';
+import { renameSite, renameSiteDefinition } from './renameSite';
+import { changePhpVersion, changePhpVersionDefinition } from './changePhpVersion';
+import { importSite, importSiteDefinition } from './importSite';
 
 export type ToolHandler = (
   args: Record<string, unknown>,
@@ -58,6 +66,18 @@ export function registerTools(): void {
 
   // System info
   tools.set('get_local_info', { definition: getLocalInfoDefinition, handler: getLocalInfo });
+
+  // Phase 8: WordPress Development Tools
+  tools.set('export_database', { definition: exportDatabaseDefinition, handler: exportDatabase });
+  tools.set('import_database', { definition: importDatabaseDefinition, handler: importDatabase });
+  tools.set('open_adminer', { definition: openAdminerDefinition, handler: openAdminer });
+  tools.set('trust_ssl', { definition: trustSslDefinition, handler: trustSsl });
+  tools.set('rename_site', { definition: renameSiteDefinition, handler: renameSite });
+  tools.set('change_php_version', {
+    definition: changePhpVersionDefinition,
+    handler: changePhpVersion,
+  });
+  tools.set('import_site', { definition: importSiteDefinition, handler: importSite });
 }
 
 /**

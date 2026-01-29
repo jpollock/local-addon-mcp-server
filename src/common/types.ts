@@ -65,6 +65,7 @@ export interface LocalServices {
   siteData: {
     getSites(): any[];
     getSite(id: string): any | undefined;
+    updateSite?(siteID: string, site: Partial<{ name: string }>): void;
   };
   siteProcessManager: {
     start(site: any): Promise<void>;
@@ -112,5 +113,24 @@ export interface LocalServices {
   blueprints?: {
     getBlueprints(): Promise<any[]>;
     saveBlueprint(site: any, options: { name: string; description?: string }): Promise<any>;
+  };
+  // Phase 8 services
+  adminer?: {
+    open(site: any): Promise<void>;
+  };
+  x509Cert?: {
+    trustCert(site: any): Promise<void>;
+  };
+  siteProvisioner?: {
+    swapService(
+      site: any,
+      role: string,
+      serviceName: string,
+      serviceBinVersion: string,
+      restartRouter?: boolean
+    ): Promise<void>;
+  };
+  importSite?: {
+    run(settings: { importType?: string; zipPath: string; siteName: string }): Promise<any>;
   };
 }

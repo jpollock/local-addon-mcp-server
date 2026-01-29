@@ -17,12 +17,12 @@
 | Phase 5: Expanded Tools | ✅ Complete | 5/6 tasks |
 | Phase 6: Distribution | ✅ Complete | 4/4 tasks |
 | Phase 7: Testing & Quality | ⚠️ Partial | 2/5 tasks |
-| Phase 8: WordPress Dev Tools | 📋 Proposed | 0/7 tasks |
+| Phase 8: WordPress Dev Tools | ✅ Complete | 7/7 tasks |
 | Phase 9: Site Config & Dev | 📋 Proposed | 0/6 tasks |
 | Phase 10: Backup & Restore | 📋 Proposed | 0/3 tasks |
 | Phase 11: Connect/Sync | 📋 Proposed | 0/3 tasks |
 
-**Current Release:** v0.0.1 (14 tools)
+**Current Release:** v0.0.2 (21 tools)
 
 ---
 
@@ -473,19 +473,19 @@ src/
 
 ---
 
-## Phase 8: WordPress Development Tools (Proposed)
+## Phase 8: WordPress Development Tools ✅ Complete
 
 **Goal:** High-value tools for WordPress development workflow
 
 | Task | Tool | Priority | GraphQL Status | Status |
 |------|------|----------|----------------|--------|
-| 8.1 | `import_site` | High | Needs work | ❌ |
-| 8.2 | `export_database` | High | As-is (WP-CLI) | ❌ |
-| 8.3 | `import_database` | High | As-is (WP-CLI) | ❌ |
-| 8.4 | `open_adminer` | High | As-is | ❌ |
-| 8.5 | `rename_site` | Medium | Needs work | ❌ |
-| 8.6 | `change_php_version` | Medium | Needs work | ❌ |
-| 8.7 | `trust_ssl` | Medium | As-is | ❌ |
+| 8.1 | `import_site` | High | As-is | ✅ |
+| 8.2 | `export_database` | High | As-is (WP-CLI) | ✅ |
+| 8.3 | `import_database` | High | As-is (WP-CLI) | ✅ |
+| 8.4 | `open_adminer` | High | As-is | ✅ |
+| 8.5 | `rename_site` | Medium | As-is | ✅ |
+| 8.6 | `change_php_version` | Medium | As-is | ✅ |
+| 8.7 | `trust_ssl` | Medium | As-is | ✅ |
 
 ---
 
@@ -591,6 +591,13 @@ The following features are explicitly excluded:
 ---
 
 ## Changelog
+
+### 2026-01-28 (Update 6)
+- Phase 8 complete: 7 new WordPress Development Tools
+- Added: export_database, import_database, open_adminer, trust_ssl, rename_site, change_php_version, import_site
+- Total tools: 21 (up from 14)
+- Added Phase 8 tests (17 new test cases)
+- Updated USER-GUIDE with new tools documentation
 
 ### 2026-01-28 (Update 5)
 - Added Phases 8-11 roadmap based on Local feature analysis
