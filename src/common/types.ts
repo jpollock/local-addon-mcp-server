@@ -148,5 +148,6 @@ export interface LocalServices {
     getInstallList(): Promise<any[] | undefined>;
     getAccountList(): Promise<any[] | undefined>;
     getCurrentUser(): Promise<{ id?: string; email?: string } | undefined>;
+    getInstall(installId: string): Promise<{ id: string; name: string; environment?: string; cname?: string } | undefined>;
   };
 }

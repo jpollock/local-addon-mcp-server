@@ -20,9 +20,9 @@
 | Phase 8: WordPress Dev Tools | ✅ Complete | 7/7 tasks |
 | Phase 9: Site Config & Dev | ⚠️ Partial | 3/6 tasks |
 | Phase 10: Backup & Restore | 📋 Proposed | 0/3 tasks |
-| Phase 11: Connect/Sync | 📋 Proposed | 0/3 tasks |
+| Phase 11: Connect/Sync | 🚧 In Progress | 2/3 sub-phases |
 
-**Current Release:** v0.0.3 (24 tools)
+**Current Release:** v0.0.3 (29 tools with Phase 11a+11b)
 
 ---
 
@@ -531,14 +531,16 @@ src/
 | 11a.3 | `wpe_logout` | High | ✅ |
 | 11a.4 | `list_wpe_sites` | High | ✅ |
 
-### Phase 11b: Site Linking
+### Phase 11b: Site Linking (Simplified) ✅
+
+**Note:** Simplified to expose existing connection data. Link/unlink tools removed (connections created via Pull in Local UI).
 
 | Task | Tool | Priority | Status |
 |------|------|----------|--------|
-| 11b.1 | `link_to_wpe` | High | ❌ |
-| 11b.2 | `unlink_from_wpe` | High | ❌ |
-| 11b.3 | `get_wpe_link` | High | ❌ |
-| 11b.4 | Enhance `list_sites` with connections | Medium | ❌ |
+| 11b.1 | Enhance `list_sites` with wpeConnection | High | ✅ |
+| 11b.2 | `get_wpe_link` | High | ✅ |
+| ~~11b.3~~ | ~~`link_to_wpe`~~ | ~~High~~ | ⏭️ Skipped |
+| ~~11b.4~~ | ~~`unlink_from_wpe`~~ | ~~High~~ | ⏭️ Skipped |
 
 ### Phase 11c: Sync Operations
 
@@ -619,6 +621,13 @@ The following features are explicitly excluded:
 ---
 
 ## Changelog
+
+### 2026-01-29 (Update 10)
+- Phase 11b: Site Linking (Simplified)
+- Added get_wpe_link tool for detailed WPE connection info
+- Enhanced list_sites to include wpeConnection for each site
+- Removed link_to_wpe and unlink_from_wpe (connections created via Pull in Local UI)
+- Total tools: 29
 
 ### 2026-01-29 (Update 9)
 - Phase 11a: WP Engine Connect - Authentication & Discovery

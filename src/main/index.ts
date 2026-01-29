@@ -419,6 +419,10 @@ const typeDefs = gql`
 
     "List all sites from WP Engine account"
     listWpeSites(accountId: String): ListWpeSitesResult!
+
+    # Phase 11b: Site Linking
+    "Get WP Engine connection details for a local site"
+    getWpeLink(siteId: ID!): GetWpeLinkResult!
   }
 
   # Phase 11: WP Engine Connect Types
@@ -487,6 +491,53 @@ const typeDefs = gql`
     sites: [WpeSite!]
     "Total count of sites"
     count: Int
+  }
+
+  # Phase 11b: Site Linking Types
+  type WpeConnection {
+    "Remote install ID (UUID from WP Engine)"
+    remoteInstallId: String!
+    "Install name (human-readable, used in portal URLs)"
+    installName: String
+    "Environment (production, staging, development)"
+    environment: String
+    "Account ID"
+    accountId: String
+    "WP Engine portal URL"
+    portalUrl: String
+    "Primary domain/CNAME"
+    primaryDomain: String
+  }
+
+  "Sync capabilities available for WPE-connected sites"
+  type WpeSyncCapabilities {
+    "Whether user can push to WP Engine"
+    canPush: Boolean!
+    "Whether user can pull from WP Engine"
+    canPull: Boolean!
+    "Available sync modes"
+    syncModes: [String!]!
+    "Whether Magic Sync (select files) is available"
+    magicSyncAvailable: Boolean!
+    "Whether database sync is available"
+    databaseSyncAvailable: Boolean!
+  }
+
+  type GetWpeLinkResult {
+    "Whether site is linked to WP Engine"
+    linked: Boolean!
+    "Site name"
+    siteName: String
+    "WP Engine connections"
+    connections: [WpeConnection!]
+    "Number of connections"
+    connectionCount: Int
+    "Sync capabilities (only present if linked)"
+    capabilities: WpeSyncCapabilities
+    "Message (for unlinked sites)"
+    message: String
+    "Error message if failed"
+    error: String
   }
 
   extend type Mutation {
@@ -804,6 +855,122 @@ function createResolvers(services: any) {
             error: error.message || 'Unknown error',
             sites: [],
             count: 0,
+          };
+        }
+      },
+
+      // Phase 11b: Site Linking
+      getWpeLink: async (_parent: any, args: { siteId: string }) => {
+        const { siteId } = args;
+
+        try {
+          localLogger.info(`[${ADDON_NAME}] Getting WP Engine link for site ${siteId}`);
+
+          // Get site from siteData
+          const site = siteData.getSite(siteId);
+          if (!site) {
+            return {
+              linked: false,
+              siteName: null,
+              connections: [],
+              connectionCount: 0,
+              message: null,
+              error: `Site not found: ${siteId}`,
+            };
+          }
+
+          // Get hostConnections from site
+          const hostConnections = site.hostConnections || [];
+          const wpeConnections = hostConnections.filter((c: any) => c.hostId === 'wpe');
+
+          if (wpeConnections.length === 0) {
+            return {
+              linked: false,
+              siteName: site.name,
+              connections: [],
+              connectionCount: 0,
+              message: 'Site is not linked to any WP Engine environment. Use Connect in Local to pull a site from WPE.',
+              error: null,
+            };
+          }
+
+          // Transform connections for output, enriching with CAPI data if available
+          const connections = await Promise.all(wpeConnections.map(async (c: any) => {
+            let installName = c.remoteSiteId; // Default to UUID
+            let portalUrl = null;
+            let primaryDomain = null;
+
+            // Try to get install details from CAPI to get the actual name
+            // remoteSiteId matches install.site.id (WPE Site ID), not install.id
+            if (capiService && typeof capiService.getInstallList === 'function') {
+              try {
+                localLogger.info(`[${ADDON_NAME}] Looking for install with site.id=${c.remoteSiteId}, env=${c.remoteSiteEnv}`);
+                const installs = await capiService.getInstallList();
+                localLogger.info(`[${ADDON_NAME}] Got ${installs?.length || 0} installs from CAPI`);
+                if (installs && installs.length > 0) {
+                  // Log first install structure for debugging
+                  localLogger.info(`[${ADDON_NAME}] Sample install structure: ${JSON.stringify(installs[0], null, 2)}`);
+
+                  // Match by site.id (remoteSiteId is the WPE Site ID, not Install ID)
+                  // Also filter by environment if available
+                  const matchingInstall = installs.find((i: any) =>
+                    i.site?.id === c.remoteSiteId &&
+                    (!c.remoteSiteEnv || i.environment === c.remoteSiteEnv)
+                  );
+
+                  if (matchingInstall) {
+                    localLogger.info(`[${ADDON_NAME}] Found match: ${matchingInstall.name}`);
+                    installName = matchingInstall.name;
+                    portalUrl = `https://my.wpengine.com/installs/${matchingInstall.name}`;
+                    primaryDomain = matchingInstall.primary_domain || matchingInstall.cname || null;
+                  } else {
+                    localLogger.warn(`[${ADDON_NAME}] No matching install found for site.id=${c.remoteSiteId}`);
+                  }
+                }
+              } catch (e: any) {
+                localLogger.warn(`[${ADDON_NAME}] Could not look up install from CAPI: ${e.message}`);
+              }
+            } else {
+              localLogger.warn(`[${ADDON_NAME}] capiService or getInstallList not available`);
+            }
+
+            return {
+              remoteInstallId: c.remoteSiteId,
+              installName,
+              environment: c.remoteSiteEnv || null,
+              accountId: c.accountId || null,
+              portalUrl,
+              primaryDomain,
+            };
+          }));
+
+          // Capabilities are always the same for WPE-connected sites
+          const capabilities = {
+            canPush: true,
+            canPull: true,
+            syncModes: ['all_files', 'select_files', 'database_only'],
+            magicSyncAvailable: true,
+            databaseSyncAvailable: true,
+          };
+
+          return {
+            linked: true,
+            siteName: site.name,
+            connections,
+            connectionCount: connections.length,
+            capabilities,
+            message: null,
+            error: null,
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] Failed to get WPE link:`, error);
+          return {
+            linked: false,
+            siteName: null,
+            connections: [],
+            connectionCount: 0,
+            message: null,
+            error: error.message || 'Unknown error',
           };
         }
       },
@@ -2074,7 +2241,7 @@ export default function (_context: LocalMain.AddonMainContext): void {
     // Register GraphQL extensions (for local-cli and MCP)
     const resolvers = createResolvers(services);
     graphql.registerGraphQLService('mcp-server', typeDefs, resolvers);
-    localLogger.info(`[${ADDON_NAME}] Registered GraphQL: 28 tools (Phase 1-11a)`);
+    localLogger.info(`[${ADDON_NAME}] Registered GraphQL: 29 tools (Phase 1-11b)`);
 
     // Start MCP server (for AI tools)
     const localServices: LocalServices = {

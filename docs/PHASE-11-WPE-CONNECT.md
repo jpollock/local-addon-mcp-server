@@ -150,83 +150,19 @@ List all sites from WP Engine account.
 
 ---
 
-## Phase 11b: Site Linking
+## Phase 11b: Site Linking (Simplified)
+
+**Status:** ✅ Completed
+
+**Note:** WP Engine site connections are created implicitly when pulling a site from WPE using Connect in Local. There is no explicit "link" UI or API in Local. Phase 11b focuses on exposing existing connection data.
 
 ### Tools
 
-#### `link_to_wpe`
-Link a local site to a WP Engine environment.
+#### Enhanced `list_sites`
 
-**Input:**
-```json
-{
-  "localSiteId": "abc123",
-  "remoteInstallId": "install-456",
-  "environment": "production"
-}
-```
+The existing `list_sites` tool now includes WPE connection info for each site:
 
 **Output:**
-```json
-{
-  "success": true,
-  "message": "Linked 'my-local-site' to WPE install 'mysite' (production)"
-}
-```
-
-**Notes:**
-- Creates entry in `site.hostConnections[]`
-- One local site can link to multiple remote environments
-
-#### `unlink_from_wpe`
-Remove WP Engine link from a local site.
-
-**Input:**
-```json
-{
-  "localSiteId": "abc123",
-  "remoteInstallId": "install-456"
-}
-```
-
-**Output:**
-```json
-{
-  "success": true,
-  "message": "Unlinked 'my-local-site' from WPE install 'mysite'"
-}
-```
-
-#### `get_wpe_link`
-Get WP Engine connection details for a local site.
-
-**Input:**
-```json
-{
-  "localSiteId": "abc123"
-}
-```
-
-**Output:**
-```json
-{
-  "linked": true,
-  "connections": [
-    {
-      "remoteInstallId": "install-456",
-      "installName": "mysite",
-      "environment": "production",
-      "accountName": "My Account",
-      "lastSync": "2026-01-28T10:30:00Z"
-    }
-  ]
-}
-```
-
-### Enhanced `list_sites`
-
-The existing `list_sites` tool will be enhanced to include WPE connection info:
-
 ```json
 {
   "sites": [
@@ -234,15 +170,65 @@ The existing `list_sites` tool will be enhanced to include WPE connection info:
       "id": "abc123",
       "name": "my-local-site",
       "status": "running",
-      "wpeConnections": [
-        {
-          "installId": "install-456",
-          "installName": "mysite",
-          "environment": "production"
-        }
-      ]
+      "domain": "my-local-site.local",
+      "wpeConnection": {
+        "remoteSiteId": "4120c932-...",
+        "environment": "production",
+        "canPushPull": true
+      }
     }
-  ]
+  ],
+  "count": 1
+}
+```
+
+**Notes:**
+- `wpeConnection` is `null` if site has no WPE link
+- `canPushPull: true` indicates the site can Push/Pull with WP Engine
+- For full details (install name, portal URL, capabilities), use `get_wpe_link`
+
+#### `get_wpe_link`
+Get detailed WP Engine connection information for a local site.
+
+**Input:**
+```json
+{
+  "site": "my-local-site"
+}
+```
+
+**Output (linked):**
+```json
+{
+  "linked": true,
+  "siteName": "my-local-site",
+  "connections": [
+    {
+      "remoteInstallId": "4120c932-...",
+      "installName": "mysite",
+      "environment": "production",
+      "accountId": "abc123",
+      "portalUrl": "https://my.wpengine.com/installs/mysite",
+      "primaryDomain": "mysite.wpengine.com"
+    }
+  ],
+  "connectionCount": 1,
+  "capabilities": {
+    "canPush": true,
+    "canPull": true,
+    "syncModes": ["all_files", "select_files", "database_only"],
+    "magicSyncAvailable": true,
+    "databaseSyncAvailable": true
+  }
+}
+```
+
+**Output (not linked):**
+```json
+{
+  "linked": false,
+  "siteName": "my-local-site",
+  "message": "Site is not linked to any WP Engine environment. Use Connect in Local to pull a site from WPE."
 }
 ```
 
@@ -397,26 +383,24 @@ Get recent sync operations for a site.
 
 ## Implementation Plan
 
-### Phase 11a: Authentication & Discovery
-**Estimated: 4 tools**
+### Phase 11a: Authentication & Discovery ✅
+**Tools: 4 (wpe_status, wpe_authenticate, wpe_logout, list_wpe_sites)**
 
-1. Add GraphQL types for WPE auth status
-2. Add GraphQL mutations for authenticate/logout
-3. Add GraphQL query for remote sites
-4. Implement stdio transport handlers
-5. Test OAuth flow end-to-end
+1. ✅ Add GraphQL types for WPE auth status
+2. ✅ Add GraphQL mutations for authenticate/logout
+3. ✅ Add GraphQL query for remote sites
+4. ✅ Implement stdio transport handlers
+5. ✅ Test OAuth flow end-to-end
 
-### Phase 11b: Site Linking
-**Estimated: 4 tools (including list_sites enhancement)**
+### Phase 11b: Site Linking (Simplified) ✅
+**Tools: 2 (enhanced list_sites, get_wpe_link)**
 
-1. Add GraphQL mutations for link/unlink
-2. Add GraphQL query for link status
-3. Modify list_sites to include connections
-4. Implement stdio transport handlers
-5. Test linking/unlinking flow
+1. ✅ Enhanced list_sites to include wpeConnection info
+2. ✅ Added get_wpe_link tool for detailed connection info
+3. ⏭️ Skipped link/unlink tools (connections created via Pull in Local UI)
 
 ### Phase 11c: Sync Operations
-**Estimated: 5 tools**
+**Planned: 5 tools**
 
 1. Add GraphQL types for sync status/progress
 2. Add GraphQL mutations for push/pull
@@ -466,3 +450,7 @@ Get recent sync operations for a site.
 - Initial design document created
 - Defined 12 tools across 3 sub-phases
 - Established design decisions (WPE-only, confirm required, includeSql default false)
+- Implemented Phase 11a: 4 WPE authentication/discovery tools
+- Fixed API mismatch (isAuthenticated → getAccessToken, logout → clearTokens)
+- Simplified Phase 11b: removed link/unlink tools (connections created via Pull UI)
+- Implemented Phase 11b: enhanced list_sites + get_wpe_link tool

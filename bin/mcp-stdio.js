@@ -520,6 +520,21 @@ const tools = [
       },
     },
   },
+  // Phase 11b: Site Linking
+  {
+    name: 'get_wpe_link',
+    description: 'Get WP Engine connection details for a local site. Shows if the site is linked to a WPE environment and sync status.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        site: {
+          type: 'string',
+          description: 'Site name or ID',
+        },
+      },
+      required: ['site'],
+    },
+  },
 ];
 
 // Find site by name or ID
@@ -564,6 +579,12 @@ async function handleTool(name, args) {
             name
             status
             domain
+            hostConnections {
+              hostId
+              remoteSiteId
+              remoteSiteEnv
+              accountId
+            }
           }
         }
       `);
@@ -575,6 +596,21 @@ async function handleTool(name, args) {
       } else if (args.status === 'stopped') {
         sites = sites.filter(s => s.status !== 'running');
       }
+
+      // Transform hostConnections to wpeConnection for easier reading
+      sites = sites.map(site => {
+        const wpeConnection = site.hostConnections?.find(c => c.hostId === 'wpe');
+        return {
+          ...site,
+          hostConnections: undefined, // Remove raw hostConnections
+          wpeConnection: wpeConnection ? {
+            remoteSiteId: wpeConnection.remoteSiteId,
+            environment: wpeConnection.remoteSiteEnv || null,
+            // Note: For full install name and capabilities, use get_wpe_link
+            canPushPull: true, // All WPE-connected sites can push/pull
+          } : null,
+        };
+      });
 
       return {
         content: [{
@@ -1603,6 +1639,79 @@ async function handleTool(name, args) {
         content: [{
           type: 'text',
           text: JSON.stringify({ sites: result.sites, count: result.count }, null, 2),
+        }],
+      };
+    }
+
+    // Phase 11b: Site Linking
+    case 'get_wpe_link': {
+      const site = await findSite(args.site);
+      if (!site) {
+        return {
+          content: [{ type: 'text', text: `Site not found: ${args.site}` }],
+          isError: true,
+        };
+      }
+
+      // Use the getWpeLink query which enriches with CAPI data
+      const data = await graphqlRequest(`
+        query($siteId: ID!) {
+          getWpeLink(siteId: $siteId) {
+            linked
+            siteName
+            connections {
+              remoteInstallId
+              installName
+              environment
+              accountId
+              portalUrl
+              primaryDomain
+            }
+            connectionCount
+            capabilities {
+              canPush
+              canPull
+              syncModes
+              magicSyncAvailable
+              databaseSyncAvailable
+            }
+            message
+            error
+          }
+        }
+      `, { siteId: site.id });
+
+      const result = data.getWpeLink;
+      if (result.error) {
+        return {
+          content: [{ type: 'text', text: `Failed to get WPE link: ${result.error}` }],
+          isError: true,
+        };
+      }
+
+      if (!result.linked) {
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              linked: false,
+              siteName: result.siteName,
+              message: result.message || 'Site is not linked to any WP Engine environment.',
+            }, null, 2),
+          }],
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            linked: true,
+            siteName: result.siteName,
+            connections: result.connections,
+            connectionCount: result.connectionCount,
+            capabilities: result.capabilities,
+          }, null, 2),
         }],
       };
     }
