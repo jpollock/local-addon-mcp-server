@@ -828,12 +828,8 @@ function createResolvers(services: any) {
     wpePull: wpePullService,
     connectHistory: connectHistoryService,
     wpeConnectBase: wpeConnectBaseService,
-    // Phase 10: Cloud Backup services
-    backupService,
-    dropbox: dropboxService,
-    googleDrive: googleDriveService,
-    featureFlags: featureFlagsService,
-    userData,
+    // Note: Phase 10 Cloud Backup services are accessed via IPC to the Cloud Backups addon
+    // (backupService, dropbox, googleDrive, featureFlags, userData)
   } = services;
 
   // Helper to invoke IPC calls to the Cloud Backups addon
