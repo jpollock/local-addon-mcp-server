@@ -399,15 +399,15 @@ Get recent sync operations for a site.
 2. ✅ Added get_wpe_link tool for detailed connection info
 3. ⏭️ Skipped link/unlink tools (connections created via Pull in Local UI)
 
-### Phase 11c: Sync Operations
-**Planned: 5 tools**
+### Phase 11c: Sync Operations ✅
+**Tools: 3 (push_to_wpe, pull_from_wpe, get_sync_history)**
 
-1. Add GraphQL types for sync status/progress
-2. Add GraphQL mutations for push/pull
-3. Add GraphQL queries for progress/history
-4. Implement background sync tracking
-5. Implement stdio transport handlers
-6. Test full sync flow
+1. ✅ Add GraphQL types for sync operations
+2. ✅ Add GraphQL mutations for push/pull
+3. ✅ Add GraphQL query for sync history
+4. ✅ Implement stdio transport handlers
+5. ⏭️ Skipped preview_push (requires manifest system integration)
+6. ⏭️ Skipped get_sync_progress (progress shown in Local UI)
 
 ---
 

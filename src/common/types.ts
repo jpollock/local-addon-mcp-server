@@ -150,4 +150,50 @@ export interface LocalServices {
     getCurrentUser(): Promise<{ id?: string; email?: string } | undefined>;
     getInstall(installId: string): Promise<{ id: string; name: string; environment?: string; cname?: string } | undefined>;
   };
+  // Phase 11c: Sync services
+  wpePush?: {
+    push(args: {
+      includeSql?: boolean;
+      wpengineInstallName: string;
+      wpengineInstallId: string;
+      wpengineSiteId: string;
+      wpenginePrimaryDomain: string;
+      localSiteId: string;
+      environment?: string;
+      files?: string[];
+      isMagicSync?: boolean;
+    }): Promise<void>;
+    pushDatabase(args: {
+      wpengineInstallName: string;
+      localSiteId: string;
+      wpenginePrimaryDomain: string;
+    }): Promise<void>;
+  };
+  wpePull?: {
+    pull(args: {
+      includeSql?: boolean;
+      wpengineInstallName: string;
+      wpengineInstallId: string;
+      wpengineSiteId: string;
+      wpenginePrimaryDomain: string;
+      localSiteId: string;
+      environment?: string;
+      files?: string[];
+      isMagicSync?: boolean;
+    }): Promise<void>;
+    pullDatabase(args: {
+      wpengineInstallName: string;
+      localSiteId: string;
+      wpenginePrimaryDomain: string;
+    }): Promise<void>;
+  };
+  connectHistory?: {
+    getEvents(siteId: string): Array<{
+      remoteInstallName?: string;
+      timestamp: number;
+      environment: string;
+      direction: 'push' | 'pull';
+      status?: 'started' | 'failed' | 'completed';
+    }>;
+  };
 }

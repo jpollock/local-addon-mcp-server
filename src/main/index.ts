@@ -540,6 +540,48 @@ const typeDefs = gql`
     error: String
   }
 
+  # Phase 11c: Sync Operations Types
+  type SyncHistoryEvent {
+    "Remote install name"
+    remoteInstallName: String
+    "Unix timestamp"
+    timestamp: Float!
+    "Environment (production, staging, development)"
+    environment: String!
+    "Sync direction"
+    direction: String!
+    "Sync status"
+    status: String
+  }
+
+  type GetSyncHistoryResult {
+    "Whether the query was successful"
+    success: Boolean!
+    "Site name"
+    siteName: String
+    "Sync history events"
+    events: [SyncHistoryEvent!]
+    "Number of events"
+    count: Int
+    "Error message if failed"
+    error: String
+  }
+
+  type SyncResult {
+    "Whether the sync was initiated successfully"
+    success: Boolean!
+    "Status message"
+    message: String
+    "Error message if failed"
+    error: String
+  }
+
+  extend type Query {
+    # Phase 11c: Sync Operations
+    "Get sync history for a local site"
+    getSyncHistory(siteId: ID!, limit: Int): GetSyncHistoryResult!
+  }
+
   extend type Mutation {
     # Phase 11: WP Engine Connect
     "Authenticate with WP Engine (opens browser for OAuth)"
@@ -547,6 +589,22 @@ const typeDefs = gql`
 
     "Logout from WP Engine"
     wpeLogout: WpeLogoutResult!
+
+    # Phase 11c: Sync Operations
+    "Push local site to WP Engine"
+    pushToWpe(
+      localSiteId: ID!
+      remoteInstallId: ID!
+      includeSql: Boolean = false
+      confirm: Boolean = false
+    ): SyncResult!
+
+    "Pull from WP Engine to local site"
+    pullFromWpe(
+      localSiteId: ID!
+      remoteInstallId: ID!
+      includeSql: Boolean = false
+    ): SyncResult!
   }
 `;
 
@@ -575,6 +633,10 @@ function createResolvers(services: any) {
     // Phase 11: WP Engine Connect
     wpeOAuth: wpeOAuthService,
     capi: capiService,
+    // Phase 11c: Sync services
+    wpePush: wpePushService,
+    wpePull: wpePullService,
+    connectHistory: connectHistoryService,
   } = services;
 
   // Shared WP-CLI execution logic
@@ -970,6 +1032,64 @@ function createResolvers(services: any) {
             connections: [],
             connectionCount: 0,
             message: null,
+            error: error.message || 'Unknown error',
+          };
+        }
+      },
+
+      // Phase 11c: Sync History
+      getSyncHistory: async (_parent: any, args: { siteId: string; limit?: number }) => {
+        const { siteId, limit = 30 } = args;
+
+        try {
+          localLogger.info(`[${ADDON_NAME}] Getting sync history for site ${siteId}`);
+
+          // Get site to verify it exists
+          const site = siteData.getSite(siteId);
+          if (!site) {
+            return {
+              success: false,
+              siteName: null,
+              events: [],
+              count: 0,
+              error: `Site not found: ${siteId}`,
+            };
+          }
+
+          // Check if connectHistory service is available
+          if (!connectHistoryService || typeof connectHistoryService.getEvents !== 'function') {
+            return {
+              success: false,
+              siteName: site.name,
+              events: [],
+              count: 0,
+              error: 'Sync history service not available',
+            };
+          }
+
+          const events = connectHistoryService.getEvents(siteId);
+          const limitedEvents = events.slice(0, limit);
+
+          return {
+            success: true,
+            siteName: site.name,
+            events: limitedEvents.map((e: any) => ({
+              remoteInstallName: e.remoteInstallName || null,
+              timestamp: e.timestamp,
+              environment: e.environment,
+              direction: e.direction,
+              status: e.status || null,
+            })),
+            count: limitedEvents.length,
+            error: null,
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] Failed to get sync history:`, error);
+          return {
+            success: false,
+            siteName: null,
+            events: [],
+            count: 0,
             error: error.message || 'Unknown error',
           };
         }
@@ -2116,6 +2236,206 @@ function createResolvers(services: any) {
             success: false,
             message: null,
             error: error.message || 'Logout failed',
+          };
+        }
+      },
+
+      // Phase 11c: Push to WP Engine
+      pushToWpe: async (_parent: any, args: {
+        localSiteId: string;
+        remoteInstallId: string;
+        includeSql?: boolean;
+        confirm?: boolean;
+      }) => {
+        const { localSiteId, remoteInstallId, includeSql = false, confirm = false } = args;
+
+        try {
+          localLogger.info(`[${ADDON_NAME}] Push to WPE: site=${localSiteId}, remote=${remoteInstallId}, includeSql=${includeSql}`);
+
+          // Require confirmation for push operations
+          if (!confirm) {
+            return {
+              success: false,
+              message: null,
+              error: 'Push requires confirm=true to prevent accidental overwrites. Set confirm=true to proceed.',
+            };
+          }
+
+          // Verify site exists
+          const site = siteData.getSite(localSiteId);
+          if (!site) {
+            return {
+              success: false,
+              message: null,
+              error: `Site not found: ${localSiteId}`,
+            };
+          }
+
+          // Check WPE connection exists
+          const wpeConnection = site.hostConnections?.find((c: any) => c.hostId === 'wpe');
+          if (!wpeConnection) {
+            return {
+              success: false,
+              message: null,
+              error: 'Site is not linked to WP Engine. Use Connect in Local to link the site first.',
+            };
+          }
+
+          // Check push service availability
+          if (!wpePushService || typeof wpePushService.push !== 'function') {
+            return {
+              success: false,
+              message: null,
+              error: 'WPE Push service not available',
+            };
+          }
+
+          // Get install details from CAPI to get required parameters
+          let installName = remoteInstallId;
+          let primaryDomain = '';
+          let installId = '';
+
+          if (capiService && typeof capiService.getInstallList === 'function') {
+            const installs = await capiService.getInstallList();
+            const matchingInstall = installs?.find((i: any) =>
+              i.site?.id === wpeConnection.remoteSiteId &&
+              (!wpeConnection.remoteSiteEnv || i.environment === wpeConnection.remoteSiteEnv)
+            );
+            if (matchingInstall) {
+              installName = matchingInstall.name;
+              primaryDomain = matchingInstall.primary_domain || matchingInstall.cname || `${matchingInstall.name}.wpengine.com`;
+              installId = matchingInstall.id;
+            }
+          }
+
+          if (!primaryDomain) {
+            return {
+              success: false,
+              message: null,
+              error: 'Could not determine WP Engine install details. Please ensure you are authenticated.',
+            };
+          }
+
+          // Start the push operation (async - returns immediately)
+          wpePushService.push({
+            includeSql,
+            wpengineInstallName: installName,
+            wpengineInstallId: installId,
+            wpengineSiteId: wpeConnection.remoteSiteId,
+            wpenginePrimaryDomain: primaryDomain,
+            localSiteId: site.id,
+            environment: wpeConnection.remoteSiteEnv,
+            isMagicSync: false,
+          }).catch((err: any) => {
+            localLogger.error(`[${ADDON_NAME}] Push failed:`, err);
+          });
+
+          return {
+            success: true,
+            message: `Push started to ${installName}. Check Local UI for progress.`,
+            error: null,
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] Failed to start push:`, error);
+          return {
+            success: false,
+            message: null,
+            error: error.message || 'Failed to start push',
+          };
+        }
+      },
+
+      // Phase 11c: Pull from WP Engine
+      pullFromWpe: async (_parent: any, args: {
+        localSiteId: string;
+        remoteInstallId: string;
+        includeSql?: boolean;
+      }) => {
+        const { localSiteId, remoteInstallId, includeSql = false } = args;
+
+        try {
+          localLogger.info(`[${ADDON_NAME}] Pull from WPE: site=${localSiteId}, remote=${remoteInstallId}, includeSql=${includeSql}`);
+
+          // Verify site exists
+          const site = siteData.getSite(localSiteId);
+          if (!site) {
+            return {
+              success: false,
+              message: null,
+              error: `Site not found: ${localSiteId}`,
+            };
+          }
+
+          // Check WPE connection exists
+          const wpeConnection = site.hostConnections?.find((c: any) => c.hostId === 'wpe');
+          if (!wpeConnection) {
+            return {
+              success: false,
+              message: null,
+              error: 'Site is not linked to WP Engine. Use Connect in Local to link the site first.',
+            };
+          }
+
+          // Check pull service availability
+          if (!wpePullService || typeof wpePullService.pull !== 'function') {
+            return {
+              success: false,
+              message: null,
+              error: 'WPE Pull service not available',
+            };
+          }
+
+          // Get install details from CAPI
+          let installName = remoteInstallId;
+          let primaryDomain = '';
+          let installId = '';
+
+          if (capiService && typeof capiService.getInstallList === 'function') {
+            const installs = await capiService.getInstallList();
+            const matchingInstall = installs?.find((i: any) =>
+              i.site?.id === wpeConnection.remoteSiteId &&
+              (!wpeConnection.remoteSiteEnv || i.environment === wpeConnection.remoteSiteEnv)
+            );
+            if (matchingInstall) {
+              installName = matchingInstall.name;
+              primaryDomain = matchingInstall.primary_domain || matchingInstall.cname || `${matchingInstall.name}.wpengine.com`;
+              installId = matchingInstall.id;
+            }
+          }
+
+          if (!primaryDomain) {
+            return {
+              success: false,
+              message: null,
+              error: 'Could not determine WP Engine install details. Please ensure you are authenticated.',
+            };
+          }
+
+          // Start the pull operation (async - returns immediately)
+          wpePullService.pull({
+            includeSql,
+            wpengineInstallName: installName,
+            wpengineInstallId: installId,
+            wpengineSiteId: wpeConnection.remoteSiteId,
+            wpenginePrimaryDomain: primaryDomain,
+            localSiteId: site.id,
+            environment: wpeConnection.remoteSiteEnv,
+            isMagicSync: false,
+          }).catch((err: any) => {
+            localLogger.error(`[${ADDON_NAME}] Pull failed:`, err);
+          });
+
+          return {
+            success: true,
+            message: `Pull started from ${installName}. Check Local UI for progress.`,
+            error: null,
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] Failed to start pull:`, error);
+          return {
+            success: false,
+            message: null,
+            error: error.message || 'Failed to start pull',
           };
         }
       },

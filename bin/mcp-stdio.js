@@ -523,13 +523,72 @@ const tools = [
   // Phase 11b: Site Linking
   {
     name: 'get_wpe_link',
-    description: 'Get WP Engine connection details for a local site. Shows if the site is linked to a WPE environment and sync status.',
+    description: 'Get WP Engine connection details for a local site. Shows if the site is linked to a WPE environment and sync capabilities.',
     inputSchema: {
       type: 'object',
       properties: {
         site: {
           type: 'string',
           description: 'Site name or ID',
+        },
+      },
+      required: ['site'],
+    },
+  },
+  // Phase 11c: Sync Operations
+  {
+    name: 'push_to_wpe',
+    description: 'Push local site files and/or database to WP Engine. Requires confirm=true to prevent accidental overwrites. Progress is shown in Local UI.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        site: {
+          type: 'string',
+          description: 'Site name or ID',
+        },
+        include_database: {
+          type: 'boolean',
+          description: 'Include database in push (default: false)',
+        },
+        confirm: {
+          type: 'boolean',
+          description: 'Must be true to confirm push operation (required for safety)',
+        },
+      },
+      required: ['site', 'confirm'],
+    },
+  },
+  {
+    name: 'pull_from_wpe',
+    description: 'Pull files and/or database from WP Engine to local site. Progress is shown in Local UI.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        site: {
+          type: 'string',
+          description: 'Site name or ID',
+        },
+        include_database: {
+          type: 'boolean',
+          description: 'Include database in pull (default: false)',
+        },
+      },
+      required: ['site'],
+    },
+  },
+  {
+    name: 'get_sync_history',
+    description: 'Get sync history (push/pull operations) for a local site.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        site: {
+          type: 'string',
+          description: 'Site name or ID',
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of history events to return (default: 10)',
         },
       },
       required: ['site'],
@@ -1711,6 +1770,148 @@ async function handleTool(name, args) {
             connections: result.connections,
             connectionCount: result.connectionCount,
             capabilities: result.capabilities,
+          }, null, 2),
+        }],
+      };
+    }
+
+    // Phase 11c: Sync Operations
+    case 'push_to_wpe': {
+      const site = await findSite(args.site);
+      if (!site) {
+        return {
+          content: [{ type: 'text', text: `Site not found: ${args.site}` }],
+          isError: true,
+        };
+      }
+
+      const data = await graphqlRequest(`
+        mutation($localSiteId: ID!, $remoteInstallId: ID!, $includeSql: Boolean, $confirm: Boolean) {
+          pushToWpe(localSiteId: $localSiteId, remoteInstallId: $remoteInstallId, includeSql: $includeSql, confirm: $confirm) {
+            success
+            message
+            error
+          }
+        }
+      `, {
+        localSiteId: site.id,
+        remoteInstallId: site.id, // Will be resolved by the mutation using hostConnections
+        includeSql: args.include_database || false,
+        confirm: args.confirm || false,
+      });
+
+      const result = data.pushToWpe;
+      if (!result.success) {
+        return {
+          content: [{ type: 'text', text: result.error || 'Push failed' }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            success: true,
+            message: result.message,
+          }, null, 2),
+        }],
+      };
+    }
+
+    case 'pull_from_wpe': {
+      const site = await findSite(args.site);
+      if (!site) {
+        return {
+          content: [{ type: 'text', text: `Site not found: ${args.site}` }],
+          isError: true,
+        };
+      }
+
+      const data = await graphqlRequest(`
+        mutation($localSiteId: ID!, $remoteInstallId: ID!, $includeSql: Boolean) {
+          pullFromWpe(localSiteId: $localSiteId, remoteInstallId: $remoteInstallId, includeSql: $includeSql) {
+            success
+            message
+            error
+          }
+        }
+      `, {
+        localSiteId: site.id,
+        remoteInstallId: site.id, // Will be resolved by the mutation using hostConnections
+        includeSql: args.include_database || false,
+      });
+
+      const result = data.pullFromWpe;
+      if (!result.success) {
+        return {
+          content: [{ type: 'text', text: result.error || 'Pull failed' }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            success: true,
+            message: result.message,
+          }, null, 2),
+        }],
+      };
+    }
+
+    case 'get_sync_history': {
+      const site = await findSite(args.site);
+      if (!site) {
+        return {
+          content: [{ type: 'text', text: `Site not found: ${args.site}` }],
+          isError: true,
+        };
+      }
+
+      const data = await graphqlRequest(`
+        query($siteId: ID!, $limit: Int) {
+          getSyncHistory(siteId: $siteId, limit: $limit) {
+            success
+            siteName
+            events {
+              remoteInstallName
+              timestamp
+              environment
+              direction
+              status
+            }
+            count
+            error
+          }
+        }
+      `, {
+        siteId: site.id,
+        limit: args.limit || 10,
+      });
+
+      const result = data.getSyncHistory;
+      if (!result.success) {
+        return {
+          content: [{ type: 'text', text: result.error || 'Failed to get sync history' }],
+          isError: true,
+        };
+      }
+
+      // Format events for readability
+      const formattedEvents = result.events.map(e => ({
+        ...e,
+        timestamp: new Date(e.timestamp).toISOString(),
+      }));
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            siteName: result.siteName,
+            events: formattedEvents,
+            count: result.count,
           }, null, 2),
         }],
       };

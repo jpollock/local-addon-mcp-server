@@ -20,9 +20,9 @@
 | Phase 8: WordPress Dev Tools | ✅ Complete | 7/7 tasks |
 | Phase 9: Site Config & Dev | ⚠️ Partial | 3/6 tasks |
 | Phase 10: Backup & Restore | 📋 Proposed | 0/3 tasks |
-| Phase 11: Connect/Sync | 🚧 In Progress | 2/3 sub-phases |
+| Phase 11: Connect/Sync | ✅ Complete | 3/3 sub-phases |
 
-**Current Release:** v0.0.3 (29 tools with Phase 11a+11b)
+**Current Release:** v0.0.3 (32 tools with Phase 11 complete)
 
 ---
 
@@ -516,13 +516,13 @@ src/
 
 ---
 
-## Phase 11: WP Engine Connect/Sync 🚧 In Progress
+## Phase 11: WP Engine Connect/Sync ✅ Complete
 
 **Goal:** WP Engine hosting integration with Magic Sync support
 **Design Document:** [PHASE-11-WPE-CONNECT.md](./PHASE-11-WPE-CONNECT.md)
 **Branch:** `feature/phase-11-wpe-connect`
 
-### Phase 11a: Authentication & Discovery
+### Phase 11a: Authentication & Discovery ✅
 
 | Task | Tool | Priority | Status |
 |------|------|----------|--------|
@@ -542,21 +542,22 @@ src/
 | ~~11b.3~~ | ~~`link_to_wpe`~~ | ~~High~~ | ⏭️ Skipped |
 | ~~11b.4~~ | ~~`unlink_from_wpe`~~ | ~~High~~ | ⏭️ Skipped |
 
-### Phase 11c: Sync Operations
+### Phase 11c: Sync Operations ✅
 
 | Task | Tool | Priority | Status |
 |------|------|----------|--------|
-| 11c.1 | `preview_push` | High | ❌ |
-| 11c.2 | `push_to_wpe` | High | ❌ |
-| 11c.3 | `pull_from_wpe` | High | ❌ |
-| 11c.4 | `get_sync_progress` | Medium | ❌ |
-| 11c.5 | `get_sync_history` | Low | ❌ |
+| 11c.1 | `push_to_wpe` | High | ✅ |
+| 11c.2 | `pull_from_wpe` | High | ✅ |
+| 11c.3 | `get_sync_history` | Medium | ✅ |
+| ~~11c.4~~ | ~~`preview_push`~~ | ~~High~~ | ⏭️ Skipped (requires manifest) |
+| ~~11c.5~~ | ~~`get_sync_progress`~~ | ~~Medium~~ | ⏭️ Skipped (progress in Local UI) |
 
 **Design Decisions:**
 - WP Engine only (Flywheel deferred)
 - `includeSql` defaults to `false` (safer)
 - `push_to_wpe` requires `confirm=true`
 - OAuth tokens stored in system keychain
+- Sync operations start async, progress shown in Local UI
 
 ---
 
