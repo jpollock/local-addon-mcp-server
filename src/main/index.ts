@@ -614,7 +614,9 @@ function createResolvers(services: any) {
         } = args.input;
 
         // DEBUG: Log destructured values
-        localLogger.info(`[${ADDON_NAME}] Destructured - name: ${name}, blueprint: ${blueprint}, typeof blueprint: ${typeof blueprint}`);
+        localLogger.info(
+          `[${ADDON_NAME}] Destructured - name: ${name}, blueprint: ${blueprint}, typeof blueprint: ${typeof blueprint}`
+        );
 
         try {
           localLogger.info(
@@ -666,17 +668,27 @@ function createResolvers(services: any) {
 
               const zip = new StreamZip.async({ file: blueprintZipPath });
               const entries = await zip.entries();
-              localLogger.info(`[${ADDON_NAME}] Zip entries loaded, count: ${Object.keys(entries).length}`);
+              localLogger.info(
+                `[${ADDON_NAME}] Zip entries loaded, count: ${Object.keys(entries).length}`
+              );
 
-              const filename = entries['local-site.json'] ? 'local-site.json' : 'pressmatic-site.json';
+              const filename = entries['local-site.json']
+                ? 'local-site.json'
+                : 'pressmatic-site.json';
               localLogger.info(`[${ADDON_NAME}] Reading manifest file: ${filename}`);
 
               const data = await zip.entryData(filename);
               localSiteJSON = JSON.parse(data.toString('utf8'));
               await zip.close();
-              localLogger.info(`[${ADDON_NAME}] Successfully read manifest:`, JSON.stringify(localSiteJSON).substring(0, 200));
+              localLogger.info(
+                `[${ADDON_NAME}] Successfully read manifest:`,
+                JSON.stringify(localSiteJSON).substring(0, 200)
+              );
             } catch (zipError: any) {
-              localLogger.error(`[${ADDON_NAME}] Failed to read blueprint zip: ${zipError.message}`, zipError);
+              localLogger.error(
+                `[${ADDON_NAME}] Failed to read blueprint zip: ${zipError.message}`,
+                zipError
+              );
               return {
                 success: false,
                 error: `Failed to read blueprint manifest: ${zipError.message}`,
@@ -729,7 +741,10 @@ function createResolvers(services: any) {
               importSettings.phpVersion = localSiteJSON.phpVersion;
             }
 
-            localLogger.info(`[${ADDON_NAME}] Import settings prepared:`, JSON.stringify(importSettings).substring(0, 500));
+            localLogger.info(
+              `[${ADDON_NAME}] Import settings prepared:`,
+              JSON.stringify(importSettings).substring(0, 500)
+            );
 
             if (!importSiteService) {
               localLogger.error(`[${ADDON_NAME}] importSiteService is not available!`);
@@ -747,10 +762,15 @@ function createResolvers(services: any) {
             // Use the importSiteService to create from blueprint
             const importResult = await importSiteService.run(importSettings);
 
-            localLogger.info(`[${ADDON_NAME}] Import result:`, JSON.stringify(importResult || 'null').substring(0, 500));
+            localLogger.info(
+              `[${ADDON_NAME}] Import result:`,
+              JSON.stringify(importResult || 'null').substring(0, 500)
+            );
 
             if (importResult && importResult.id) {
-              localLogger.info(`[${ADDON_NAME}] Successfully created site from blueprint: ${name} (${importResult.id})`);
+              localLogger.info(
+                `[${ADDON_NAME}] Successfully created site from blueprint: ${name} (${importResult.id})`
+              );
               return {
                 success: true,
                 error: null,
@@ -1366,7 +1386,9 @@ function createResolvers(services: any) {
             };
           }
 
-          localLogger.info(`[${ADDON_NAME}] Changing PHP version for ${site.name} to ${phpVersion}`);
+          localLogger.info(
+            `[${ADDON_NAME}] Changing PHP version for ${site.name} to ${phpVersion}`
+          );
 
           if (siteProvisioner) {
             await siteProvisioner.swapService(site, 'php', phpVersion);
@@ -1395,10 +1417,7 @@ function createResolvers(services: any) {
         }
       },
 
-      importSite: async (
-        _parent: any,
-        args: { input: { zipPath: string; siteName?: string } }
-      ) => {
+      importSite: async (_parent: any, args: { input: { zipPath: string; siteName?: string } }) => {
         const { zipPath, siteName } = args.input;
         const fs = require('fs');
 
@@ -1448,10 +1467,7 @@ function createResolvers(services: any) {
       },
 
       // Phase 9: Site Configuration & Dev Tools
-      toggleXdebug: async (
-        _parent: any,
-        args: { input: { siteId: string; enabled: boolean } }
-      ) => {
+      toggleXdebug: async (_parent: any, args: { input: { siteId: string; enabled: boolean } }) => {
         const { siteId, enabled } = args.input;
 
         try {
@@ -1532,10 +1548,17 @@ function createResolvers(services: any) {
           for (const logName of targetLogs) {
             // Check for error and access logs
             for (const suffix of ['error.log', 'access.log', '.log']) {
-              const logPath = pathModule.join(logsDir, `${logName}${suffix === '.log' ? '' : '/'}${suffix}`);
+              const logPath = pathModule.join(
+                logsDir,
+                `${logName}${suffix === '.log' ? '' : '/'}${suffix}`
+              );
               const altLogPath = pathModule.join(logsDir, `${logName}${suffix}`);
 
-              const finalPath = fs.existsSync(logPath) ? logPath : fs.existsSync(altLogPath) ? altLogPath : null;
+              const finalPath = fs.existsSync(logPath)
+                ? logPath
+                : fs.existsSync(altLogPath)
+                  ? altLogPath
+                  : null;
 
               if (finalPath && fs.existsSync(finalPath)) {
                 try {
@@ -1735,9 +1758,7 @@ export default function (_context: LocalMain.AddonMainContext): void {
     // Register GraphQL extensions (for local-cli and MCP)
     const resolvers = createResolvers(services);
     graphql.registerGraphQLService('mcp-server', typeDefs, resolvers);
-    localLogger.info(
-      `[${ADDON_NAME}] Registered GraphQL: 24 tools (Phase 1-9)`
-    );
+    localLogger.info(`[${ADDON_NAME}] Registered GraphQL: 24 tools (Phase 1-9)`);
 
     // Start MCP server (for AI tools)
     const localServices: LocalServices = {
