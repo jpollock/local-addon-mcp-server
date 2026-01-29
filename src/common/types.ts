@@ -138,4 +138,20 @@ export interface LocalServices {
     getRegisteredServices(role?: string): Record<string, Record<string, any>>;
     getServices(role?: string): Promise<Record<string, Record<string, any>>>;
   };
+  // Phase 11: WP Engine Connect services
+  wpeOAuth?: {
+    isAuthenticated(): Promise<boolean>;
+    authenticate(): Promise<{ email?: string } | null>;
+    logout(): Promise<void>;
+    getCredentials(): Promise<{
+      email?: string;
+      accountId?: string;
+      accountName?: string;
+      expiresAt?: number;
+    } | null>;
+  };
+  capi?: {
+    getInstalls(accountId?: string): Promise<any[]>;
+    getAccounts(): Promise<any[]>;
+  };
 }

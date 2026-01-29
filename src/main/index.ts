@@ -412,6 +412,90 @@ const typeDefs = gql`
 
     "List available service versions"
     listServices(type: String): ListServicesResult!
+
+    # Phase 11: WP Engine Connect
+    "Check WP Engine authentication status"
+    wpeStatus: WpeAuthStatus!
+
+    "List all sites from WP Engine account"
+    listWpeSites(accountId: String): ListWpeSitesResult!
+  }
+
+  # Phase 11: WP Engine Connect Types
+  type WpeAuthStatus {
+    "Whether authenticated with WP Engine"
+    authenticated: Boolean!
+    "User email if authenticated"
+    email: String
+    "Account ID if authenticated"
+    accountId: String
+    "Account name if authenticated"
+    accountName: String
+    "Token expiry time"
+    tokenExpiry: String
+    "Error message if status check failed"
+    error: String
+  }
+
+  type WpeAuthResult {
+    "Whether authentication was successful"
+    success: Boolean!
+    "User email if successful"
+    email: String
+    "Message about the authentication result"
+    message: String
+    "Error message if failed"
+    error: String
+  }
+
+  type WpeLogoutResult {
+    "Whether logout was successful"
+    success: Boolean!
+    "Message about the logout result"
+    message: String
+    "Error message if failed"
+    error: String
+  }
+
+  type WpeSite {
+    "Install ID"
+    id: String!
+    "Install name"
+    name: String!
+    "Environment (production, staging, development)"
+    environment: String!
+    "PHP version"
+    phpVersion: String
+    "Primary domain"
+    primaryDomain: String
+    "Account ID"
+    accountId: String
+    "Account name"
+    accountName: String
+    "SFTP host"
+    sftpHost: String
+    "SFTP user"
+    sftpUser: String
+  }
+
+  type ListWpeSitesResult {
+    "Whether query was successful"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+    "List of WP Engine sites"
+    sites: [WpeSite!]
+    "Total count of sites"
+    count: Int
+  }
+
+  extend type Mutation {
+    # Phase 11: WP Engine Connect
+    "Authenticate with WP Engine (opens browser for OAuth)"
+    wpeAuthenticate: WpeAuthResult!
+
+    "Logout from WP Engine"
+    wpeLogout: WpeLogoutResult!
   }
 `;
 
@@ -437,6 +521,9 @@ function createResolvers(services: any) {
     lightningServices,
     siteDatabase,
     importSQLFile: importSQLFileService,
+    // Phase 11: WP Engine Connect
+    wpeOAuth: wpeOAuthService,
+    capi: capiService,
   } = services;
 
   // Shared WP-CLI execution logic
@@ -577,6 +664,131 @@ function createResolvers(services: any) {
             success: false,
             error: error.message || 'Unknown error',
             services: [],
+          };
+        }
+      },
+
+      // Phase 11: WP Engine Connect
+      wpeStatus: async () => {
+        try {
+          localLogger.info(`[${ADDON_NAME}] Checking WP Engine authentication status`);
+
+          if (!wpeOAuthService) {
+            return {
+              authenticated: false,
+              email: null,
+              accountId: null,
+              accountName: null,
+              tokenExpiry: null,
+              error: 'WP Engine OAuth service not available',
+            };
+          }
+
+          // Check if we have valid credentials
+          const isAuthenticated = await wpeOAuthService.isAuthenticated();
+
+          if (!isAuthenticated) {
+            return {
+              authenticated: false,
+              email: null,
+              accountId: null,
+              accountName: null,
+              tokenExpiry: null,
+              error: null,
+            };
+          }
+
+          // Get user info from stored credentials
+          const credentials = await wpeOAuthService.getCredentials();
+
+          return {
+            authenticated: true,
+            email: credentials?.email || null,
+            accountId: credentials?.accountId || null,
+            accountName: credentials?.accountName || null,
+            tokenExpiry: credentials?.expiresAt
+              ? new Date(credentials.expiresAt).toISOString()
+              : null,
+            error: null,
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] Failed to check WPE status:`, error);
+          return {
+            authenticated: false,
+            email: null,
+            accountId: null,
+            accountName: null,
+            tokenExpiry: null,
+            error: error.message || 'Unknown error',
+          };
+        }
+      },
+
+      listWpeSites: async (_parent: any, args: { accountId?: string }) => {
+        const { accountId } = args;
+
+        try {
+          localLogger.info(
+            `[${ADDON_NAME}] Listing WP Engine sites${accountId ? ` for account ${accountId}` : ''}`
+          );
+
+          if (!wpeOAuthService) {
+            return {
+              success: false,
+              error: 'WP Engine OAuth service not available',
+              sites: [],
+              count: 0,
+            };
+          }
+
+          // Check if authenticated
+          const isAuthenticated = await wpeOAuthService.isAuthenticated();
+          if (!isAuthenticated) {
+            return {
+              success: false,
+              error: 'Not authenticated with WP Engine. Use wpe_authenticate first.',
+              sites: [],
+              count: 0,
+            };
+          }
+
+          if (!capiService) {
+            return {
+              success: false,
+              error: 'WP Engine CAPI service not available',
+              sites: [],
+              count: 0,
+            };
+          }
+
+          // Get installs from CAPI
+          const installs = await capiService.getInstalls(accountId);
+
+          const sites = installs.map((install: any) => ({
+            id: install.id || install.installId,
+            name: install.name,
+            environment: install.environment || 'production',
+            phpVersion: install.phpVersion || null,
+            primaryDomain: install.primaryDomain || install.domain || null,
+            accountId: install.accountId || accountId || null,
+            accountName: install.accountName || null,
+            sftpHost: install.sftpHost || null,
+            sftpUser: install.sftpUser || null,
+          }));
+
+          return {
+            success: true,
+            error: null,
+            sites,
+            count: sites.length,
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] Failed to list WPE sites:`, error);
+          return {
+            success: false,
+            error: error.message || 'Unknown error',
+            sites: [],
+            count: 0,
           };
         }
       },
@@ -1636,6 +1848,80 @@ function createResolvers(services: any) {
           };
         }
       },
+
+      // Phase 11: WP Engine Connect
+      wpeAuthenticate: async () => {
+        try {
+          localLogger.info(`[${ADDON_NAME}] Initiating WP Engine authentication`);
+
+          if (!wpeOAuthService) {
+            return {
+              success: false,
+              email: null,
+              message: null,
+              error: 'WP Engine OAuth service not available',
+            };
+          }
+
+          // Trigger OAuth flow - this will open browser for user consent
+          const result = await wpeOAuthService.authenticate();
+
+          if (result && result.email) {
+            localLogger.info(`[${ADDON_NAME}] Successfully authenticated with WPE as ${result.email}`);
+            return {
+              success: true,
+              email: result.email,
+              message: 'Successfully authenticated with WP Engine',
+              error: null,
+            };
+          }
+
+          return {
+            success: true,
+            email: null,
+            message: 'Authentication initiated. Please complete the login in your browser.',
+            error: null,
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] WPE authentication failed:`, error);
+          return {
+            success: false,
+            email: null,
+            message: null,
+            error: error.message || 'Authentication failed',
+          };
+        }
+      },
+
+      wpeLogout: async () => {
+        try {
+          localLogger.info(`[${ADDON_NAME}] Logging out from WP Engine`);
+
+          if (!wpeOAuthService) {
+            return {
+              success: false,
+              message: null,
+              error: 'WP Engine OAuth service not available',
+            };
+          }
+
+          await wpeOAuthService.logout();
+
+          localLogger.info(`[${ADDON_NAME}] Successfully logged out from WPE`);
+          return {
+            success: true,
+            message: 'Logged out from WP Engine',
+            error: null,
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] WPE logout failed:`, error);
+          return {
+            success: false,
+            message: null,
+            error: error.message || 'Logout failed',
+          };
+        }
+      },
     },
   };
 }
@@ -1758,7 +2044,7 @@ export default function (_context: LocalMain.AddonMainContext): void {
     // Register GraphQL extensions (for local-cli and MCP)
     const resolvers = createResolvers(services);
     graphql.registerGraphQLService('mcp-server', typeDefs, resolvers);
-    localLogger.info(`[${ADDON_NAME}] Registered GraphQL: 24 tools (Phase 1-9)`);
+    localLogger.info(`[${ADDON_NAME}] Registered GraphQL: 28 tools (Phase 1-11a)`);
 
     // Start MCP server (for AI tools)
     const localServices: LocalServices = {
@@ -1773,6 +2059,9 @@ export default function (_context: LocalMain.AddonMainContext): void {
       siteProvisioner: services.siteProvisioner,
       importSite: services.importSite,
       lightningServices: services.lightningServices,
+      // Phase 11: WP Engine Connect
+      wpeOAuth: services.wpeOAuth,
+      capi: services.capi,
     };
 
     startMcpServer(localServices, localLogger);

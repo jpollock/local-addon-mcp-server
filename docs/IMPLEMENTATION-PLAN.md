@@ -516,17 +516,45 @@ src/
 
 ---
 
-## Phase 11: Connect/Sync (Conditional)
+## Phase 11: WP Engine Connect/Sync 🚧 In Progress
 
-**Goal:** Hosting provider integration (requires user authentication)
+**Goal:** WP Engine hosting integration with Magic Sync support
+**Design Document:** [PHASE-11-WPE-CONNECT.md](./PHASE-11-WPE-CONNECT.md)
+**Branch:** `feature/phase-11-wpe-connect`
 
-| Task | Tool | Priority | GraphQL Status | Status |
-|------|------|----------|----------------|--------|
-| 11.1 | `list_remote_sites` | Low | Needs work | ❌ |
-| 11.2 | `push_site` | Low | Needs work | ❌ |
-| 11.3 | `pull_site` | Low | Needs work | ❌ |
+### Phase 11a: Authentication & Discovery
 
-**Note:** Defer unless specifically requested. High complexity and security considerations.
+| Task | Tool | Priority | Status |
+|------|------|----------|--------|
+| 11a.1 | `wpe_status` | High | ✅ |
+| 11a.2 | `wpe_authenticate` | High | ✅ |
+| 11a.3 | `wpe_logout` | High | ✅ |
+| 11a.4 | `list_wpe_sites` | High | ✅ |
+
+### Phase 11b: Site Linking
+
+| Task | Tool | Priority | Status |
+|------|------|----------|--------|
+| 11b.1 | `link_to_wpe` | High | ❌ |
+| 11b.2 | `unlink_from_wpe` | High | ❌ |
+| 11b.3 | `get_wpe_link` | High | ❌ |
+| 11b.4 | Enhance `list_sites` with connections | Medium | ❌ |
+
+### Phase 11c: Sync Operations
+
+| Task | Tool | Priority | Status |
+|------|------|----------|--------|
+| 11c.1 | `preview_push` | High | ❌ |
+| 11c.2 | `push_to_wpe` | High | ❌ |
+| 11c.3 | `pull_from_wpe` | High | ❌ |
+| 11c.4 | `get_sync_progress` | Medium | ❌ |
+| 11c.5 | `get_sync_history` | Low | ❌ |
+
+**Design Decisions:**
+- WP Engine only (Flywheel deferred)
+- `includeSql` defaults to `false` (safer)
+- `push_to_wpe` requires `confirm=true`
+- OAuth tokens stored in system keychain
 
 ---
 
@@ -591,6 +619,14 @@ The following features are explicitly excluded:
 ---
 
 ## Changelog
+
+### 2026-01-29 (Update 9)
+- Phase 11a: WP Engine Connect - Authentication & Discovery
+- Added 4 new tools: wpe_status, wpe_authenticate, wpe_logout, list_wpe_sites
+- Total tools: 28 (up from 24)
+- Created Phase 11 design document (PHASE-11-WPE-CONNECT.md)
+- Working in feature branch: `feature/phase-11-wpe-connect`
+- Uses Local's WpeOAuthService and CAPIService for WPE integration
 
 ### 2026-01-28 (Update 8)
 - **CRITICAL FIX**: Updated stdio transport (`bin/mcp-stdio.js`) with all 24 tools

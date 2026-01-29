@@ -482,6 +482,44 @@ const tools = [
       },
     },
   },
+  // Phase 11: WP Engine Connect
+  {
+    name: 'wpe_status',
+    description: 'Check WP Engine authentication status',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'wpe_authenticate',
+    description: 'Authenticate with WP Engine. Opens browser for OAuth login.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'wpe_logout',
+    description: 'Logout from WP Engine and clear stored credentials',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'list_wpe_sites',
+    description: 'List all sites from your WP Engine account. Requires authentication.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        account_id: {
+          type: 'string',
+          description: 'Filter by specific WP Engine account ID (optional)',
+        },
+      },
+    },
+  },
 ];
 
 // Find site by name or ID
@@ -1414,6 +1452,157 @@ async function handleTool(name, args) {
         content: [{
           type: 'text',
           text: JSON.stringify({ services: result.services, count: result.services.length }, null, 2),
+        }],
+      };
+    }
+
+    // Phase 11: WP Engine Connect
+    case 'wpe_status': {
+      const data = await graphqlRequest(`
+        query {
+          wpeStatus {
+            authenticated
+            email
+            accountId
+            accountName
+            tokenExpiry
+            error
+          }
+        }
+      `);
+
+      const result = data.wpeStatus;
+      if (result.error && !result.authenticated) {
+        return {
+          content: [{ type: 'text', text: `WP Engine status check failed: ${result.error}` }],
+          isError: true,
+        };
+      }
+
+      if (!result.authenticated) {
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              authenticated: false,
+              message: 'Not authenticated with WP Engine. Use wpe_authenticate to login.',
+            }, null, 2),
+          }],
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            authenticated: true,
+            email: result.email,
+            accountId: result.accountId,
+            accountName: result.accountName,
+            tokenExpiry: result.tokenExpiry,
+          }, null, 2),
+        }],
+      };
+    }
+
+    case 'wpe_authenticate': {
+      const data = await graphqlRequest(`
+        mutation {
+          wpeAuthenticate {
+            success
+            email
+            message
+            error
+          }
+        }
+      `);
+
+      const result = data.wpeAuthenticate;
+      if (!result.success) {
+        return {
+          content: [{ type: 'text', text: `WP Engine authentication failed: ${result.error}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            success: true,
+            email: result.email,
+            message: result.message || 'Authentication initiated. Please complete the login in your browser.',
+          }, null, 2),
+        }],
+      };
+    }
+
+    case 'wpe_logout': {
+      const data = await graphqlRequest(`
+        mutation {
+          wpeLogout {
+            success
+            message
+            error
+          }
+        }
+      `);
+
+      const result = data.wpeLogout;
+      if (!result.success) {
+        return {
+          content: [{ type: 'text', text: `WP Engine logout failed: ${result.error}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            success: true,
+            message: result.message || 'Logged out from WP Engine',
+          }, null, 2),
+        }],
+      };
+    }
+
+    case 'list_wpe_sites': {
+      const data = await graphqlRequest(`
+        query($accountId: String) {
+          listWpeSites(accountId: $accountId) {
+            success
+            error
+            sites {
+              id
+              name
+              environment
+              phpVersion
+              primaryDomain
+              accountId
+              accountName
+              sftpHost
+              sftpUser
+            }
+            count
+          }
+        }
+      `, {
+        accountId: args.account_id || null,
+      });
+
+      const result = data.listWpeSites;
+      if (!result.success) {
+        return {
+          content: [{ type: 'text', text: `Failed to list WP Engine sites: ${result.error}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({ sites: result.sites, count: result.count }, null, 2),
         }],
       };
     }
