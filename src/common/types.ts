@@ -196,4 +196,24 @@ export interface LocalServices {
       status?: 'started' | 'failed' | 'completed';
     }>;
   };
+  // Magic Sync change detection
+  wpeConnectBase?: {
+    listModifications(args: {
+      connectArgs: {
+        wpengineInstallName: string;
+        wpengineInstallId: string;
+        wpengineSiteId: string;
+        wpenginePrimaryDomain: string;
+        localSiteId: string;
+      };
+      direction: 'push' | 'pull';
+      includeIgnored?: boolean;
+    }): Promise<Array<{
+      path: string;
+      type: string;
+      size: number;
+      mtime: number;
+      instruction: string;
+    }>>;
+  };
 }

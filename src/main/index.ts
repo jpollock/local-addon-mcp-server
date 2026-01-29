@@ -576,10 +576,46 @@ const typeDefs = gql`
     error: String
   }
 
+  # File change detection
+  type FileChange {
+    "File path relative to site root"
+    path: String!
+    "Change type: create, upload, download, delete, modify"
+    instruction: String!
+    "File size in bytes"
+    size: Int
+    "File type: - (file) or d (directory)"
+    type: String
+  }
+
+  type GetSiteChangesResult {
+    "Whether the query was successful"
+    success: Boolean!
+    "Site name"
+    siteName: String
+    "Direction of comparison"
+    direction: String
+    "Files that would be added/uploaded"
+    added: [FileChange!]
+    "Files that would be modified"
+    modified: [FileChange!]
+    "Files that would be deleted"
+    deleted: [FileChange!]
+    "Total number of changes"
+    totalChanges: Int
+    "Summary message"
+    message: String
+    "Error message if failed"
+    error: String
+  }
+
   extend type Query {
     # Phase 11c: Sync Operations
     "Get sync history for a local site"
     getSyncHistory(siteId: ID!, limit: Int): GetSyncHistoryResult!
+
+    "Get file changes between local site and WP Engine (dry-run comparison)"
+    getSiteChanges(siteId: ID!, direction: String = "push"): GetSiteChangesResult!
   }
 
   extend type Mutation {
@@ -637,6 +673,7 @@ function createResolvers(services: any) {
     wpePush: wpePushService,
     wpePull: wpePullService,
     connectHistory: connectHistoryService,
+    wpeConnectBase: wpeConnectBaseService,
   } = services;
 
   // Shared WP-CLI execution logic
@@ -1090,6 +1127,181 @@ function createResolvers(services: any) {
             siteName: null,
             events: [],
             count: 0,
+            error: error.message || 'Unknown error',
+          };
+        }
+      },
+
+      // Get file changes between local and WPE (dry-run comparison)
+      getSiteChanges: async (_parent: any, args: { siteId: string; direction?: string }) => {
+        const { siteId, direction = 'push' } = args;
+
+        try {
+          localLogger.info(`[${ADDON_NAME}] Getting site changes for ${siteId}, direction=${direction}`);
+
+          // Validate direction
+          if (direction !== 'push' && direction !== 'pull') {
+            return {
+              success: false,
+              siteName: null,
+              direction,
+              added: [],
+              modified: [],
+              deleted: [],
+              totalChanges: 0,
+              message: null,
+              error: 'Invalid direction. Must be "push" or "pull".',
+            };
+          }
+
+          // Get site
+          const site = siteData.getSite(siteId);
+          if (!site) {
+            return {
+              success: false,
+              siteName: null,
+              direction,
+              added: [],
+              modified: [],
+              deleted: [],
+              totalChanges: 0,
+              message: null,
+              error: `Site not found: ${siteId}`,
+            };
+          }
+
+          // Check WPE connection
+          const wpeConnection = site.hostConnections?.find((c: any) => c.hostId === 'wpe');
+          if (!wpeConnection) {
+            return {
+              success: false,
+              siteName: site.name,
+              direction,
+              added: [],
+              modified: [],
+              deleted: [],
+              totalChanges: 0,
+              message: null,
+              error: 'Site is not linked to WP Engine. Use Connect in Local to link the site first.',
+            };
+          }
+
+          // Check service availability
+          if (!wpeConnectBaseService || typeof wpeConnectBaseService.listModifications !== 'function') {
+            return {
+              success: false,
+              siteName: site.name,
+              direction,
+              added: [],
+              modified: [],
+              deleted: [],
+              totalChanges: 0,
+              message: null,
+              error: 'WPE Connect service not available',
+            };
+          }
+
+          // Get install details from CAPI
+          let installName = wpeConnection.remoteSiteId;
+          let primaryDomain = '';
+          let installId = '';
+
+          if (capiService && typeof capiService.getInstallList === 'function') {
+            const installs = await capiService.getInstallList();
+            const matchingInstall = installs?.find((i: any) =>
+              i.site?.id === wpeConnection.remoteSiteId &&
+              (!wpeConnection.remoteSiteEnv || i.environment === wpeConnection.remoteSiteEnv)
+            );
+            if (matchingInstall) {
+              installName = matchingInstall.name;
+              primaryDomain = matchingInstall.primary_domain || matchingInstall.cname || `${matchingInstall.name}.wpengine.com`;
+              installId = matchingInstall.id;
+            }
+          }
+
+          if (!primaryDomain) {
+            return {
+              success: false,
+              siteName: site.name,
+              direction,
+              added: [],
+              modified: [],
+              deleted: [],
+              totalChanges: 0,
+              message: null,
+              error: 'Could not determine WP Engine install details. Please ensure you are authenticated.',
+            };
+          }
+
+          // Call listModifications (dry-run rsync comparison)
+          localLogger.info(`[${ADDON_NAME}] Calling listModifications for ${installName}`);
+          const modifications = await wpeConnectBaseService.listModifications({
+            connectArgs: {
+              wpengineInstallName: installName,
+              wpengineInstallId: installId,
+              wpengineSiteId: wpeConnection.remoteSiteId,
+              wpenginePrimaryDomain: primaryDomain,
+              localSiteId: site.id,
+            },
+            direction: direction as 'push' | 'pull',
+            includeIgnored: false,
+          });
+
+          // Categorize changes
+          const added = modifications.filter((f: any) =>
+            f.instruction === 'create' || f.instruction === 'upload' || f.instruction === 'download'
+          ).map((f: any) => ({
+            path: f.path,
+            instruction: f.instruction,
+            size: f.size,
+            type: f.type,
+          }));
+
+          const modified = modifications.filter((f: any) =>
+            f.instruction === 'modify'
+          ).map((f: any) => ({
+            path: f.path,
+            instruction: f.instruction,
+            size: f.size,
+            type: f.type,
+          }));
+
+          const deleted = modifications.filter((f: any) =>
+            f.instruction === 'delete'
+          ).map((f: any) => ({
+            path: f.path,
+            instruction: f.instruction,
+            size: f.size,
+            type: f.type,
+          }));
+
+          const totalChanges = added.length + modified.length + deleted.length;
+          const directionLabel = direction === 'push' ? 'local → WPE' : 'WPE → local';
+
+          return {
+            success: true,
+            siteName: site.name,
+            direction,
+            added,
+            modified,
+            deleted,
+            totalChanges,
+            message: totalChanges > 0
+              ? `${totalChanges} file(s) changed (${directionLabel}): ${added.length} added, ${modified.length} modified, ${deleted.length} deleted`
+              : `No changes detected (${directionLabel})`,
+            error: null,
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] Failed to get site changes:`, error);
+          return {
+            success: false,
+            siteName: null,
+            direction,
+            added: [],
+            modified: [],
+            deleted: [],
+            totalChanges: 0,
+            message: null,
             error: error.message || 'Unknown error',
           };
         }

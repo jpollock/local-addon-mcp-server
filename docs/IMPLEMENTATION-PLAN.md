@@ -22,7 +22,7 @@
 | Phase 10: Backup & Restore | 📋 Proposed | 0/3 tasks |
 | Phase 11: Connect/Sync | ✅ Complete | 3/3 sub-phases |
 
-**Current Release:** v0.0.3 (32 tools with Phase 11 complete)
+**Current Release:** v0.0.3 (33 tools with Phase 11 complete)
 
 ---
 
@@ -549,7 +549,7 @@ src/
 | 11c.1 | `push_to_wpe` | High | ✅ |
 | 11c.2 | `pull_from_wpe` | High | ✅ |
 | 11c.3 | `get_sync_history` | Medium | ✅ |
-| ~~11c.4~~ | ~~`preview_push`~~ | ~~High~~ | ⏭️ Skipped (requires manifest) |
+| 11c.4 | `get_site_changes` | High | ✅ |
 | ~~11c.5~~ | ~~`get_sync_progress`~~ | ~~Medium~~ | ⏭️ Skipped (progress in Local UI) |
 
 **Design Decisions:**

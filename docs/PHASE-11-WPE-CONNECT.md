@@ -379,6 +379,47 @@ Get recent sync operations for a site.
 }
 ```
 
+#### `get_site_changes`
+Preview what files have changed between local site and WP Engine. Uses Magic Sync's dry-run comparison (no changes are made).
+
+**Input:**
+```json
+{
+  "site": "my-local-site",
+  "direction": "push"
+}
+```
+
+**direction options:**
+- `push` (default): Shows local changes that would be uploaded to WPE
+- `pull`: Shows remote changes that would be downloaded from WPE
+
+**Output:**
+```json
+{
+  "siteName": "my-local-site",
+  "direction": "push",
+  "summary": "15 file(s) changed (local → WPE): 10 added, 3 modified, 2 deleted",
+  "totalChanges": 15,
+  "added": [
+    "./wp-content/themes/mytheme/style.css",
+    "./wp-content/plugins/myplugin/main.php"
+  ],
+  "modified": [
+    "./wp-config.php"
+  ],
+  "deleted": [
+    "./wp-content/cache/old-file.txt"
+  ]
+}
+```
+
+**Notes:**
+- This is a **safe, read-only operation** - no files are modified
+- Uses rsync `--dry-run` to compare local and remote files
+- Site must be linked to WP Engine and user must be authenticated
+- Great for answering "what has changed in my site?" before pushing
+
 ---
 
 ## Implementation Plan
@@ -400,13 +441,13 @@ Get recent sync operations for a site.
 3. ⏭️ Skipped link/unlink tools (connections created via Pull in Local UI)
 
 ### Phase 11c: Sync Operations ✅
-**Tools: 3 (push_to_wpe, pull_from_wpe, get_sync_history)**
+**Tools: 4 (push_to_wpe, pull_from_wpe, get_sync_history, get_site_changes)**
 
 1. ✅ Add GraphQL types for sync operations
 2. ✅ Add GraphQL mutations for push/pull
 3. ✅ Add GraphQL query for sync history
-4. ✅ Implement stdio transport handlers
-5. ⏭️ Skipped preview_push (requires manifest system integration)
+4. ✅ Add `get_site_changes` tool (Magic Sync dry-run comparison)
+5. ✅ Implement stdio transport handlers
 6. ⏭️ Skipped get_sync_progress (progress shown in Local UI)
 
 ---

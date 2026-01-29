@@ -594,6 +594,25 @@ const tools = [
       required: ['site'],
     },
   },
+  {
+    name: 'get_site_changes',
+    description: 'Preview what files have changed between local site and WP Engine. Uses Magic Sync dry-run comparison to show added, modified, and deleted files without making any changes.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        site: {
+          type: 'string',
+          description: 'Site name or ID',
+        },
+        direction: {
+          type: 'string',
+          enum: ['push', 'pull'],
+          description: 'Direction of comparison: "push" shows local changes to upload, "pull" shows remote changes to download (default: push)',
+        },
+      },
+      required: ['site'],
+    },
+  },
 ];
 
 // Find site by name or ID
@@ -1913,6 +1932,84 @@ async function handleTool(name, args) {
             events: formattedEvents,
             count: result.count,
           }, null, 2),
+        }],
+      };
+    }
+
+    case 'get_site_changes': {
+      const site = await findSite(args.site);
+      if (!site) {
+        return {
+          content: [{ type: 'text', text: `Site not found: ${args.site}` }],
+          isError: true,
+        };
+      }
+
+      const data = await graphqlRequest(`
+        query($siteId: ID!, $direction: String) {
+          getSiteChanges(siteId: $siteId, direction: $direction) {
+            success
+            siteName
+            direction
+            added {
+              path
+              instruction
+              size
+              type
+            }
+            modified {
+              path
+              instruction
+              size
+              type
+            }
+            deleted {
+              path
+              instruction
+              size
+              type
+            }
+            totalChanges
+            message
+            error
+          }
+        }
+      `, {
+        siteId: site.id,
+        direction: args.direction || 'push',
+      });
+
+      const result = data.getSiteChanges;
+      if (!result.success) {
+        return {
+          content: [{ type: 'text', text: result.error || 'Failed to get site changes' }],
+          isError: true,
+        };
+      }
+
+      // Format output for readability
+      const output = {
+        siteName: result.siteName,
+        direction: result.direction,
+        summary: result.message,
+        totalChanges: result.totalChanges,
+      };
+
+      // Only include non-empty arrays
+      if (result.added.length > 0) {
+        output.added = result.added.map(f => f.path);
+      }
+      if (result.modified.length > 0) {
+        output.modified = result.modified.map(f => f.path);
+      }
+      if (result.deleted.length > 0) {
+        output.deleted = result.deleted.map(f => f.path);
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify(output, null, 2),
         }],
       };
     }
