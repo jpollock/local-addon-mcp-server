@@ -822,18 +822,27 @@ function createResolvers(services: any) {
 
   // Helper to invoke IPC calls to the Cloud Backups addon
   // This uses the same pattern as the BackupAIBridge
-  const invokeBackupIPC = async (channel: string, ...args: any[]): Promise<any> => {
+  // Timeout constants for backup operations (in milliseconds)
+  const BACKUP_IPC_TIMEOUT = 600000; // 10 minutes for backup operations
+  const DEFAULT_IPC_TIMEOUT = 30000; // 30 seconds for quick operations
+
+  const invokeBackupIPC = async (
+    channel: string,
+    timeoutMs: number = BACKUP_IPC_TIMEOUT,
+    ...args: any[]
+  ): Promise<any> => {
     return new Promise((resolve, reject) => {
       const timestamp = Date.now();
       const random = Math.random().toString(36).substr(2, 9);
       const successReplyChannel = `${channel}-success-${timestamp}-${random}`;
       const errorReplyChannel = `${channel}-error-${timestamp}-${random}`;
 
+      const timeoutSeconds = Math.round(timeoutMs / 1000);
       const timeout = setTimeout(() => {
         ipcMain.removeAllListeners(successReplyChannel);
         ipcMain.removeAllListeners(errorReplyChannel);
-        reject(new Error(`IPC call to ${channel} timed out after 30 seconds`));
-      }, 30000);
+        reject(new Error(`IPC call to ${channel} timed out after ${timeoutSeconds} seconds`));
+      }, timeoutMs);
 
       ipcMain.once(successReplyChannel, (_event: any, result: any) => {
         clearTimeout(timeout);
@@ -869,7 +878,7 @@ function createResolvers(services: any) {
   // Helper to get backup providers from the Cloud Backups addon
   const getBackupProviders = async (): Promise<Array<{ id: string; name: string }>> => {
     try {
-      const result = await invokeBackupIPC('backups:enabled-providers');
+      const result = await invokeBackupIPC('backups:enabled-providers', DEFAULT_IPC_TIMEOUT);
       localLogger.info(`[${ADDON_NAME}] Raw IPC result: ${JSON.stringify(result)}`);
 
       if (result.error) {
@@ -1455,6 +1464,7 @@ function createResolvers(services: any) {
           // Also pass pageOffset parameter (0 for first page)
           const result = await invokeBackupIPC(
             'backups:provider-snapshots',
+            DEFAULT_IPC_TIMEOUT,
             siteId,
             matchedProvider.id,
             0
@@ -2896,10 +2906,11 @@ function createResolvers(services: any) {
             `[${ADDON_NAME}] Using backup provider ID: ${backupProviderId} (from ${matchedProvider.id})`
           );
 
-          // Create backup via IPC
+          // Create backup via IPC (use long timeout for backup operations)
           const description = note || 'Backup created via MCP';
           const result = await invokeBackupIPC(
             'backups:backup-site',
+            BACKUP_IPC_TIMEOUT,
             siteId,
             backupProviderId,
             description
@@ -3017,9 +3028,10 @@ function createResolvers(services: any) {
           const backupProviderMap: Record<string, string> = { google: 'drive', dropbox: 'dropbox' };
           const backupProviderId = backupProviderMap[matchedProvider.id] || matchedProvider.id;
 
-          // Restore backup via IPC
+          // Restore backup via IPC (use long timeout for restore operations)
           const result = await invokeBackupIPC(
             'backups:restore-backup',
+            BACKUP_IPC_TIMEOUT,
             siteId,
             backupProviderId,
             snapshotId
@@ -3116,6 +3128,7 @@ function createResolvers(services: any) {
           // Try to delete backup via IPC (may not be supported by the addon)
           const result = await invokeBackupIPC(
             'backups:delete-backup',
+            DEFAULT_IPC_TIMEOUT,
             siteId,
             backupProviderId,
             snapshotId
@@ -3207,9 +3220,10 @@ function createResolvers(services: any) {
           const backupProviderMap: Record<string, string> = { google: 'drive', dropbox: 'dropbox' };
           const backupProviderId = backupProviderMap[matchedProvider.id] || matchedProvider.id;
 
-          // Try to download backup via IPC (may not be supported by the addon)
+          // Try to download backup via IPC (use long timeout for downloads)
           const result = await invokeBackupIPC(
             'backups:download-backup',
+            BACKUP_IPC_TIMEOUT,
             siteId,
             backupProviderId,
             snapshotId
@@ -3301,9 +3315,10 @@ function createResolvers(services: any) {
           const backupProviderMap: Record<string, string> = { google: 'drive', dropbox: 'dropbox' };
           const backupProviderId = backupProviderMap[matchedProvider.id] || matchedProvider.id;
 
-          // Try to edit backup note via IPC (may not be supported by the addon)
+          // Try to edit backup note via IPC (quick metadata operation)
           const result = await invokeBackupIPC(
             'backups:edit-note',
+            DEFAULT_IPC_TIMEOUT,
             siteId,
             backupProviderId,
             snapshotId,
