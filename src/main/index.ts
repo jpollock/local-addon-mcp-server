@@ -1231,11 +1231,14 @@ function createResolvers(services: any) {
             `[${ADDON_NAME}] ${enabled ? 'Enabling' : 'Disabling'} Xdebug for ${site.name}`
           );
 
-          // Use siteProcessManager to toggle Xdebug
-          if (enabled) {
-            await siteProcessManager.enableXdebug(site);
-          } else {
-            await siteProcessManager.disableXdebug(site);
+          // Update the site's xdebugEnabled property
+          await siteData.updateSite(siteId, { xdebugEnabled: enabled });
+
+          // Restart the site if it's running to apply the change
+          const status = await siteProcessManager.getSiteStatus(site);
+          if (status === 'running') {
+            localLogger.info(`[${ADDON_NAME}] Restarting site to apply Xdebug change`);
+            await siteProcessManager.restart(site);
           }
 
           localLogger.info(
