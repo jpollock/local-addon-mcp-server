@@ -2,18 +2,47 @@
 
 This addon adds Model Context Protocol (MCP) server capabilities to Local by WP Engine, enabling AI assistants like Claude Code, Claude.ai, ChatGPT, and Gemini to manage WordPress development sites.
 
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph AI["AI Tools"]
+        CC[Claude Code]
+        CA[Claude.ai]
+        GPT[Other MCP Clients]
+    end
+
+    subgraph MCP["MCP Server"]
+        STDIO[stdio transport]
+        SSE[SSE transport]
+    end
+
+    subgraph Local["Local by WP Engine"]
+        GQL[GraphQL API]
+        Sites[(WordPress Sites)]
+    end
+
+    CC --> STDIO
+    CA --> SSE
+    GPT --> SSE
+    STDIO --> GQL
+    SSE --> GQL
+    GQL --> Sites
+```
+
 ## Features
 
-- **MCP Server** - Exposes Local functionality to AI tools via stdio transport
-- **14 MCP Tools** - Site management, WP-CLI, blueprints, and more
-- **GraphQL Extensions** - Additional mutations for programmatic control
-- **Preferences UI** - View status and connection info in Local preferences
+- **40 MCP Tools** - Complete site management, WP-CLI, database, backups, and WP Engine sync
+- **Dual Transport** - stdio for Claude Code, SSE for web-based AI tools
+- **Cloud Backups** - Backup and restore sites to Dropbox or Google Drive
+- **WP Engine Connect** - Push and pull sites to/from WP Engine hosting
+- **Security Hardened** - Input validation, command blocklists, confirmation requirements
 
 ## Installation
 
 ### Method 1: Pre-built Release (Recommended)
 
-1. Go to the [Releases](https://github.com/getflywheel/local-addon-mcp-server/releases) page
+1. Go to the [Releases](https://github.com/jpollock/local-addon-mcp-server/releases) page
 2. Download the latest `.tgz` file
 3. Open Local → Add-ons
 4. Click **Install from disk**
@@ -24,7 +53,7 @@ This addon adds Model Context Protocol (MCP) server capabilities to Local by WP 
 ### Method 2: Build from Source
 
 ```bash
-git clone https://github.com/getflywheel/local-addon-mcp-server.git
+git clone https://github.com/jpollock/local-addon-mcp-server.git
 cd local-addon-mcp-server
 npm install
 npm run build
@@ -72,10 +101,12 @@ Ask Claude Code to:
 - "Create a new site called test-project"
 - "Run wp plugin list on my-site"
 - "Clone my-site as my-site-copy"
-- "Open my-site in the browser"
-- "Export my-site to a zip file"
+- "Back up my-site to Google Drive"
+- "Push my-site to WP Engine"
 
-## MCP Tools
+## MCP Tools (40 total)
+
+### Core Site Management (14 tools)
 
 | Tool | Description |
 |------|-------------|
@@ -94,6 +125,52 @@ Ask Claude Code to:
 | `list_blueprints` | List available blueprints |
 | `save_blueprint` | Save site as blueprint |
 
+### Database & Configuration (7 tools)
+
+| Tool | Description |
+|------|-------------|
+| `export_database` | Export database to SQL file |
+| `import_database` | Import SQL file into database |
+| `open_adminer` | Open Adminer database UI |
+| `trust_ssl` | Trust site SSL certificate |
+| `rename_site` | Rename a WordPress site |
+| `change_php_version` | Change site PHP version |
+| `import_site` | Import site from zip file |
+
+### Development & Debugging (3 tools)
+
+| Tool | Description |
+|------|-------------|
+| `toggle_xdebug` | Enable/disable Xdebug |
+| `get_site_logs` | Get PHP, Nginx, MySQL logs |
+| `list_services` | List available service versions |
+
+### Cloud Backups (7 tools)
+
+| Tool | Description |
+|------|-------------|
+| `backup_status` | Check cloud backup availability |
+| `list_backups` | List backups from cloud provider |
+| `create_backup` | Create backup to Dropbox/Google Drive |
+| `restore_backup` | Restore from cloud backup |
+| `delete_backup` | Delete a cloud backup |
+| `download_backup` | Download backup as ZIP |
+| `edit_backup_note` | Update backup description |
+
+### WP Engine Connect (9 tools)
+
+| Tool | Description |
+|------|-------------|
+| `wpe_status` | Check WP Engine auth status |
+| `wpe_authenticate` | Start OAuth authentication |
+| `wpe_logout` | Clear WP Engine tokens |
+| `list_wpe_sites` | List WP Engine sites |
+| `get_wpe_link` | Get site's WPE connection info |
+| `push_to_wpe` | Push local changes to WPE |
+| `pull_from_wpe` | Pull changes from WPE |
+| `get_sync_history` | Get push/pull history |
+| `get_site_changes` | Preview file changes |
+
 ## Documentation
 
 - [User Guide](docs/USER-GUIDE.md) - Setup instructions and usage
@@ -107,9 +184,19 @@ Ask Claude Code to:
 npm run build       # Build for production
 npm run watch       # Watch mode for development
 npm run lint        # Run ESLint
-npm run test        # Run tests
+npm run test        # Run tests (108 tests)
 npm run typecheck   # TypeScript type checking
 ```
+
+## Security
+
+The MCP server includes security hardening:
+
+- **Localhost only** - Only accepts connections from 127.0.0.1
+- **Token authentication** - Requires valid Bearer token
+- **Confirmation required** - Destructive operations require `confirm: true`
+- **WP-CLI blocklist** - Blocks dangerous commands (eval, shell, db query)
+- **Input validation** - Validates snapshot IDs, SQL paths, and more
 
 ## Contributing
 

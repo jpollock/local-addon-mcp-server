@@ -7,6 +7,30 @@ title: Troubleshooting
 
 This guide helps diagnose and resolve common issues with the MCP Server.
 
+## Diagnostic Flowchart
+
+```mermaid
+flowchart TD
+    Start[Issue Detected] --> Q1{Local running?}
+    Q1 -->|No| A1[Start Local]
+    Q1 -->|Yes| Q2{Health check OK?}
+
+    Q2 -->|No| A2[Check port/firewall]
+    Q2 -->|Yes| Q3{Auth error?}
+
+    Q3 -->|Yes| A3[Refresh token from connection info]
+    Q3 -->|No| Q4{Site not found?}
+
+    Q4 -->|Yes| A4[Use list_sites to find correct name]
+    Q4 -->|No| Q5{Command blocked?}
+
+    Q5 -->|Yes| A5[Use Local terminal for shell access]
+    Q5 -->|No| Q6{Backup/WPE error?}
+
+    Q6 -->|Yes| A6[Check provider auth status]
+    Q6 -->|No| A7[Check Local logs]
+```
+
 ## Quick Diagnostics
 
 ### Check if MCP Server is Running
@@ -139,6 +163,33 @@ cat ~/.config/Local/mcp-connection-info.json
    - The MCP server runs WP-CLI with `--skip-plugins` and `--skip-themes` by default
    - This prevents most plugin-related errors
 
+### Issue: WP-CLI Command Blocked
+
+**Symptoms:**
+- `Command 'eval' is blocked for security reasons. Use Local's terminal for shell access.`
+
+**Causes & Solutions:**
+
+1. **Security blocklist active**
+   - The following commands are blocked for security: `eval`, `eval-file`, `shell`, `db query`, `db cli`
+   - Use Local's built-in terminal for these operations
+   - This is intentional to prevent AI agents from executing arbitrary code
+
+### Issue: Invalid Snapshot ID
+
+**Symptoms:**
+- `Error: Invalid snapshot ID format. Expected hex string (8-64 characters).`
+
+**Causes & Solutions:**
+
+1. **Wrong ID format**
+   - Use `list_backups` to get valid snapshot IDs
+   - Snapshot IDs are hex strings like `1b6ea6c9b2bd83af...`
+
+2. **Using Hub database ID instead of hash**
+   - The MCP server uses restic hashes, not Hub database IDs
+   - Always copy the snapshotId from `list_backups` output
+
 ### Issue: Create Site Failed
 
 **Symptoms:**
@@ -169,6 +220,100 @@ cat ~/.config/Local/mcp-connection-info.json
    - The delete_site tool requires `confirm: true` as a safety measure
    - This prevents accidental deletions
 
+## Cloud Backup Issues
+
+### Issue: Backup Status Shows Not Available
+
+**Symptoms:**
+- `backup_status` returns `featureEnabled: false`
+
+**Causes & Solutions:**
+
+1. **Cloud Backups addon not installed**
+   - Install the Cloud Backups addon from Local's marketplace
+
+2. **No providers authenticated**
+   - Authenticate with Dropbox or Google Drive in Local's Cloud Backups settings
+
+### Issue: List Backups Returns Empty
+
+**Symptoms:**
+- `list_backups` returns empty array
+
+**Causes & Solutions:**
+
+1. **Wrong provider specified**
+   - Use exactly `dropbox` or `googleDrive` (case-sensitive)
+   - Check `backup_status` to see which providers are authenticated
+
+2. **No backups exist for this site**
+   - Create a backup first with `create_backup`
+
+### Issue: Restore Backup Failed
+
+**Symptoms:**
+- `Failed to restore backup: ...`
+
+**Causes & Solutions:**
+
+1. **Site not running**
+   - Start the site before restoring: use `start_site` first
+
+2. **Invalid snapshot ID**
+   - Use the hash from `list_backups`, not the numeric ID
+
+3. **Missing confirmation**
+   - Restore requires `confirm: true`
+
+## WP Engine Connect Issues
+
+### Issue: WPE Status Shows Not Authenticated
+
+**Symptoms:**
+- `wpe_status` returns `authenticated: false`
+
+**Causes & Solutions:**
+
+1. **Not logged in**
+   - Use `wpe_authenticate` to start OAuth flow
+   - Complete authentication in browser
+
+2. **Token expired**
+   - Tokens may expire; re-authenticate if needed
+
+### Issue: Push/Pull Failed
+
+**Symptoms:**
+- `Push to WP Engine timed out after 300 seconds`
+- `Pull from WP Engine failed: ...`
+
+**Causes & Solutions:**
+
+1. **Network issues**
+   - Check your internet connection
+   - Large sites may take longer than the 5-minute timeout
+
+2. **Site not connected**
+   - Use `get_wpe_link` to check if site is connected to WP Engine
+   - Connect the site in Local's WP Engine Connect panel
+
+3. **Missing confirmation**
+   - Both push and pull require `confirm: true`
+
+### Issue: No WPE Sites Listed
+
+**Symptoms:**
+- `list_wpe_sites` returns empty array
+
+**Causes & Solutions:**
+
+1. **Not authenticated**
+   - Use `wpe_authenticate` first
+
+2. **No sites in account**
+   - The WP Engine account may have no installs
+   - Check your WP Engine portal
+
 ## Viewing Logs
 
 Local's logs can help diagnose issues:
@@ -193,12 +338,6 @@ If the MCP server is in a bad state:
 2. Delete the connection info file (optional)
 3. Restart Local
 4. The MCP server will restart with a fresh token
-
-## Getting More Help
-
-1. **Check Local Community Forums**: https://community.localwp.com
-2. **Enable Debug Logging**: Look for debug options in Local's preferences
-3. **Report Issues**: File issues at the project repository
 
 ## Diagnostic Commands
 
@@ -235,7 +374,22 @@ else
 fi
 echo ""
 
+# Check GraphQL connection
+echo "4. Checking GraphQL connection..."
+if [ -f "$HOME/Library/Application Support/Local/graphql-connection-info.json" ]; then
+    echo "   ✓ GraphQL connection info exists"
+else
+    echo "   ✗ GraphQL connection info NOT found (Local may not be running)"
+fi
+echo ""
+
 echo "=== Diagnostics Complete ==="
 ```
 
 Save as `mcp-diagnostics.sh` and run with `bash mcp-diagnostics.sh`.
+
+## Getting More Help
+
+1. **Check Local Community Forums**: https://community.localwp.com
+2. **Enable Debug Logging**: Look for debug options in Local's preferences
+3. **Report Issues**: File issues at the project repository

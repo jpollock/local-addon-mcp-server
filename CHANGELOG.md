@@ -7,22 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.4] - 2026-01-29
+
+### Added
+- **Security Hardening:**
+  - Confirmation requirement for `pull_from_wpe` to prevent accidental overwrites
+  - WP-CLI command blocklist (blocks `eval`, `eval-file`, `shell`, `db query`, `db cli`)
+  - Snapshot ID format validation for backup operations
+  - SQL path traversal protection for `import_database`
+- **Performance Improvements:**
+  - Async file operations in `getSiteLogs` resolver
+  - Timeout handling for long operations (push/pull: 5min, backup: 10min)
+- Security test suite with 25 new tests
+
+### Changed
+- Total tests increased from 83 to 108
+
 ## [0.0.3] - 2026-01-28
+
+### Added
+- **Phase 11: WP Engine Connect (9 new tools):**
+  - `wpe_status` - Check WP Engine authentication status
+  - `wpe_authenticate` - Trigger OAuth authentication flow
+  - `wpe_logout` - Clear WP Engine tokens
+  - `list_wpe_sites` - List sites from WP Engine account
+  - `get_wpe_link` - Get WPE connection info for a local site
+  - `push_to_wpe` - Push local changes to WP Engine (requires confirmation)
+  - `pull_from_wpe` - Pull changes from WP Engine to local
+  - `get_sync_history` - Get recent push/pull history
+  - `get_site_changes` - Preview file changes (Magic Sync dry-run)
+- **Phase 10: Cloud Backups (7 new tools):**
+  - `backup_status` - Check cloud backup availability
+  - `list_backups` - List backups from Dropbox or Google Drive
+  - `create_backup` - Create backup to cloud provider
+  - `restore_backup` - Restore site from cloud backup
+  - `delete_backup` - Delete a cloud backup
+  - `download_backup` - Download backup as ZIP file
+  - `edit_backup_note` - Update backup description
+- Phase 10 and Phase 11 test suites
+- WP Engine Connect and Cloud Backups documentation
+
+### Changed
+- Total tools increased from 24 to 40
+
+## [0.0.2] - 2026-01-28
 
 ### Added
 - **Phase 9: Site Configuration & Dev Tools (3 new tools):**
   - `toggle_xdebug` - Enable/disable Xdebug for debugging
   - `get_site_logs` - Retrieve PHP, Nginx, MySQL log files
   - `list_services` - List available PHP/MySQL/Nginx versions
-- Phase 9 test suite with 11 new test cases
-- Updated USER-GUIDE with development tools section
-
-### Changed
-- Total tools increased from 21 to 24
-
-## [0.0.2] - 2026-01-28
-
-### Added
 - **Phase 8: WordPress Development Tools (7 new tools):**
   - `export_database` - Export site database to SQL file
   - `import_database` - Import SQL file into site database
@@ -31,11 +65,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `rename_site` - Rename a WordPress site
   - `change_php_version` - Change site PHP version
   - `import_site` - Import site from zip file
-- Phase 8 test suite with 17 new test cases
+- Phase 8 and Phase 9 test suites
 - Updated USER-GUIDE with database and configuration tools
 
 ### Changed
-- Total tools increased from 14 to 21
+- Total tools increased from 14 to 24
 
 ## [0.0.1] - 2026-01-28
 

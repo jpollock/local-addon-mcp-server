@@ -15,7 +15,40 @@ MCP is an open protocol that allows AI assistants to interact with external tool
 - Start, stop, and restart sites
 - Run WP-CLI commands
 - Create and delete sites
-- Get detailed site information
+- Back up sites to cloud storage
+- Push and pull to WP Engine
+
+## Tool Categories (40 tools)
+
+```mermaid
+flowchart TB
+    subgraph Core["Core Site Management (14)"]
+        list[list_sites]
+        start[start/stop/restart]
+        create[create/delete_site]
+        wp[wp_cli]
+        clone[clone/export_site]
+    end
+
+    subgraph Dev["Database & Dev Tools (10)"]
+        db[export/import_database]
+        logs[get_site_logs]
+        ssl[trust_ssl]
+        php[change_php_version]
+    end
+
+    subgraph Cloud["Cloud Backups (7)"]
+        backup[create/restore_backup]
+        list_bk[list_backups]
+        dl[download_backup]
+    end
+
+    subgraph WPE["WP Engine Connect (9)"]
+        push[push_to_wpe]
+        pull[pull_from_wpe]
+        sync[get_site_changes]
+    end
+```
 
 ## Quick Start
 
@@ -314,6 +347,25 @@ What PHP versions are available?
 
 These tools enable integration with cloud storage providers (Dropbox and Google Drive) for backing up and restoring your local sites. Requires the Cloud Backups feature to be enabled in Local.
 
+```mermaid
+flowchart LR
+    subgraph Local["Local Site"]
+        Files[Site Files]
+        DB[(Database)]
+    end
+
+    MCP[MCP Server] -->|IPC| CBA[Cloud Backups Addon]
+    CBA -->|restic| Provider
+
+    subgraph Provider["Cloud Providers"]
+        Dropbox[(Dropbox)]
+        GDrive[(Google Drive)]
+    end
+
+    Files --> CBA
+    DB --> CBA
+```
+
 ### backup_status
 Check if cloud backups are available and which providers are authenticated.
 
@@ -415,6 +467,24 @@ Update the note for backup abc123 to "Stable version before redesign"
 
 These tools enable integration with WP Engine hosting, allowing you to push and pull changes between your local sites and WP Engine environments.
 
+```mermaid
+flowchart LR
+    subgraph Local["Local Site"]
+        LF[Files]
+        LDB[(Database)]
+    end
+
+    subgraph WPE["WP Engine"]
+        WF[Files]
+        WDB[(Database)]
+    end
+
+    LF -->|"push_to_wpe"| WF
+    LDB -->|"push (include_database)"| WDB
+    WF -->|"pull_from_wpe"| LF
+    WDB -->|"pull (include_database)"| LDB
+```
+
 ### wpe_status
 Check WP Engine authentication status.
 
@@ -487,16 +557,19 @@ Push my-blog to WP Engine (confirm: true)
 ```
 
 ### pull_from_wpe
-Pull changes from WP Engine to local.
+Pull changes from WP Engine to local. Requires confirmation to prevent accidental overwrites.
 
 **Parameters:**
 - `site` (required): Site name or ID
 - `includeSql` (optional): Include database (default: false)
+- `confirm` (required): Must be `true` to proceed
 
 **Example:**
 ```
-Pull the latest changes from WP Engine for my-blog
+Pull the latest changes from WP Engine for my-blog (confirm: true)
 ```
+
+**Warning:** This will overwrite local files and potentially the database.
 
 ### get_sync_history
 Get recent push/pull operations for a site.
@@ -566,7 +639,9 @@ The MCP server has several security measures:
 
 1. **Localhost only** - Only accepts connections from 127.0.0.1
 2. **Token authentication** - Requires a valid Bearer token
-3. **Delete confirmation** - The delete_site tool requires explicit confirmation
+3. **Confirmation required** - Destructive operations (`delete_site`, `restore_backup`, `push_to_wpe`, `pull_from_wpe`) require `confirm: true`
+4. **WP-CLI blocklist** - Dangerous commands are blocked: `eval`, `eval-file`, `shell`, `db query`, `db cli`
+5. **Input validation** - Snapshot IDs and SQL paths are validated to prevent injection attacks
 
 ## Getting Help
 

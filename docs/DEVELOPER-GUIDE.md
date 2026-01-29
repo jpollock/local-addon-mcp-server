@@ -9,47 +9,51 @@ This guide explains the architecture and implementation of the MCP Server addon 
 
 ## Architecture Overview
 
+```mermaid
+flowchart TB
+    subgraph "stdio Transport (Primary)"
+        CC[Claude Code] -->|spawns| STDIO[bin/mcp-stdio.js]
+        STDIO -->|GraphQL| LOCAL1[Local API]
+    end
+
+    subgraph "SSE Transport (Secondary)"
+        WEB[Web AI Tools] -->|HTTP/SSE| SSE[McpServer.ts]
+        SSE -->|direct| LOCAL2[Local Services]
+    end
+
+    LOCAL1 --> Sites[(WordPress Sites)]
+    LOCAL2 --> Sites
+```
+
+## Project Structure
+
 ```
 local-addon-mcp-server/
 ├── bin/
-│   └── mcp-stdio.js              # stdio MCP transport (spawned by Claude Code)
+│   └── mcp-stdio.js              # stdio MCP transport (40 tools, all handlers)
 ├── src/
-│   ├── common/                   # Shared code between main and renderer
-│   │   ├── constants.ts          # Server constants (ports, names, etc.)
-│   │   └── types.ts              # TypeScript interfaces
-│   ├── main/                     # Main process (Node.js)
-│   │   ├── index.ts              # Addon entry point + GraphQL mutations
-│   │   ├── config/
-│   │   │   └── ConnectionInfo.ts # Connection info file management
-│   │   └── mcp/
-│   │       ├── McpServer.ts      # HTTP/SSE server implementation
-│   │       ├── McpAuth.ts        # Token authentication
-│   │       └── tools/            # MCP tool implementations
-│   │           ├── index.ts      # Tool registry
-│   │           ├── listSites.ts
-│   │           ├── startSite.ts
-│   │           ├── stopSite.ts
-│   │           ├── restartSite.ts
-│   │           ├── wpCli.ts
-│   │           ├── getSite.ts
-│   │           ├── createSite.ts
-│   │           ├── deleteSite.ts
-│   │           └── getLocalInfo.ts
-│   └── renderer/                 # Renderer process (React)
+│   ├── common/
+│   │   ├── constants.ts          # Server constants (ports, names)
+│   │   └── types.ts              # TypeScript interfaces (LocalServices)
+│   ├── main/
+│   │   └── index.ts              # Addon entry + GraphQL mutations/resolvers
+│   └── renderer/
 │       ├── index.tsx             # Renderer entry point
 │       └── components/           # Preferences UI components
+├── tests/
+│   ├── security.test.ts          # Security feature tests (25 tests)
+│   ├── phase10-tools.test.ts     # Cloud Backup tests
+│   ├── phase11-tools.test.ts     # WP Engine Connect tests
+│   └── ...                       # Other test files
 ├── docs/
-│   ├── RFC-001-MCP-Server.md
-│   ├── IMPLEMENTATION-PLAN.md
 │   ├── USER-GUIDE.md
 │   ├── DEVELOPER-GUIDE.md
-│   └── TROUBLESHOOTING.md
-└── lib/                          # Compiled output
+│   ├── TROUBLESHOOTING.md
+│   └── ...
+└── todos/                        # Security and architecture notes
 ```
 
 ## Dual Transport Architecture
-
-The addon supports two MCP transports:
 
 ### 1. stdio Transport (Primary)
 
@@ -57,8 +61,21 @@ The addon supports two MCP transports:
 
 The stdio transport is a standalone Node.js script that Claude Code spawns directly. It communicates with Local via Local's GraphQL API.
 
-```
-Claude Code ──stdio──> mcp-stdio.js ──GraphQL──> Local
+```mermaid
+sequenceDiagram
+    participant AI as Claude Code
+    participant MCP as mcp-stdio.js
+    participant GQL as GraphQL API
+    participant Local as Local Services
+
+    AI->>MCP: tools/call request
+    MCP->>MCP: Input validation
+    MCP->>MCP: Security checks
+    MCP->>GQL: GraphQL mutation
+    GQL->>Local: Service call
+    Local-->>GQL: Result
+    GQL-->>MCP: Response
+    MCP-->>AI: content[]
 ```
 
 **Advantages:**
@@ -70,11 +87,7 @@ Claude Code ──stdio──> mcp-stdio.js ──GraphQL──> Local
 ```javascript
 // mcp-stdio.js connects to Local's GraphQL
 const info = getGraphQLConnectionInfo(); // Reads from connection info file
-const response = await fetch(info.url, {
-  method: 'POST',
-  headers: { 'Authorization': `Bearer ${info.authToken}` },
-  body: JSON.stringify({ query, variables }),
-});
+const response = await graphqlRequest(query, variables);
 ```
 
 ### 2. SSE Transport (Secondary)
@@ -83,26 +96,10 @@ const response = await fetch(info.url, {
 
 The SSE transport runs inside Local's Electron process and has direct access to Local's service container.
 
-```
-MCP Client ──HTTP/SSE──> Local (McpServer) ──direct──> Local Services
-```
-
 **Used for:**
 - Health checks (`/health` endpoint)
 - Future browser-based AI tools
 - Tools that need instant access to Local services
-
-## Core Components
-
-### McpServer (src/main/mcp/McpServer.ts)
-
-The HTTP server that implements the MCP protocol over SSE.
-
-**Key Features:**
-- Dynamic port selection if preferred port is unavailable
-- Localhost-only binding for security
-- Token-based authentication
-- SSE transport for real-time communication
 
 **Endpoints:**
 | Endpoint | Method | Auth | Description |
@@ -111,39 +108,51 @@ The HTTP server that implements the MCP protocol over SSE.
 | `/mcp/sse` | GET | Yes | SSE connection for MCP |
 | `/mcp/messages` | POST | Yes | Tool invocation |
 
-### McpAuth (src/main/mcp/McpAuth.ts)
+## Security Architecture
 
-Handles authentication token generation and validation.
+The MCP server implements multiple security layers:
 
-**Security measures:**
-- 128-character base64 tokens
-- IP whitelist (localhost only)
-- Bearer token in Authorization header
-- Token persisted across restarts
-
-### GraphQL Extensions (src/main/index.ts)
-
-The addon extends Local's GraphQL API with mutations that the stdio transport uses:
-
-```typescript
-graphql.registerGraphQLService('mcp-server', typeDefs, resolvers);
+```mermaid
+flowchart TD
+    Request[Tool Request] --> Auth{Token Valid?}
+    Auth -->|No| Reject1[401 Unauthorized]
+    Auth -->|Yes| Localhost{From localhost?}
+    Localhost -->|No| Reject2[403 Forbidden]
+    Localhost -->|Yes| Validate{Input Valid?}
+    Validate -->|No| Reject3[400 Bad Request]
+    Validate -->|Yes| Blocklist{Command Allowed?}
+    Blocklist -->|No| Reject4[Blocked Command]
+    Blocklist -->|Yes| Confirm{Needs Confirm?}
+    Confirm -->|Yes, missing| Reject5[Confirm Required]
+    Confirm -->|No or provided| Execute[Execute Tool]
 ```
 
-**Custom Mutations:**
-- `createSite` - Creates site with proper WordPress installation
-- `deleteSite` - Deletes site with file handling options
-- `wpCli` - Executes WP-CLI commands
+### Security Features
 
-### Tool Registry (src/main/mcp/tools/index.ts)
+1. **WP-CLI Command Blocklist**
+   ```javascript
+   const BLOCKED_WP_COMMANDS = [
+     'eval',
+     'eval-file',
+     'shell',
+     'db query',
+     'db cli',
+   ];
+   ```
 
-Central registry for all available MCP tools.
+2. **Confirmation Requirements**
+   - `delete_site` - Prevents accidental site deletion
+   - `restore_backup` - Prevents accidental data loss
+   - `push_to_wpe` - Prevents accidental production overwrites
+   - `pull_from_wpe` - Prevents accidental local overwrites
 
-**Functions:**
-- `registerTools()` - Register all tools at startup
-- `getToolDefinitions()` - Get MCP tool schemas
-- `getToolNames()` - Get list of tool names
-- `executeTool(name, args, services)` - Execute a tool
-- `hasTool(name)` - Check if tool exists
+3. **Input Validation**
+   - `isValidSnapshotId()` - Validates restic snapshot ID format (hex, 8-64 chars)
+   - `isValidSqlPath()` - Validates SQL file paths, prevents traversal attacks
+
+4. **Timeout Handling**
+   - Push/Pull operations: 5 minute timeout
+   - Backup operations: 10 minute timeout
 
 ## Adding a New Tool
 
@@ -161,22 +170,38 @@ const tools = [
     inputSchema: {
       type: 'object',
       properties: {
-        param1: {
-          type: 'string',
-          description: 'Description of param1',
-        },
+        site: { type: 'string', description: 'Site name or ID' },
+        confirm: { type: 'boolean', description: 'Required for destructive ops' },
       },
-      required: ['param1'],
+      required: ['site'],
     },
   },
 ];
 
 // Add handler in the handleTool switch statement
 case 'my_new_tool': {
+  // Input validation
+  const site = await findSite(args.site);
+  if (!site) {
+    return {
+      content: [{ type: 'text', text: `Site not found: ${args.site}` }],
+      isError: true,
+    };
+  }
+
+  // For destructive operations, require confirmation
+  if (!args.confirm) {
+    return {
+      content: [{ type: 'text', text: JSON.stringify({
+        error: 'This operation requires confirm=true'
+      }) }],
+      isError: true,
+    };
+  }
+
+  // Execute via GraphQL
   const data = await graphqlRequest(`
-    query {
-      // Your GraphQL query here
-    }
+    mutation { myMutation(siteId: "${site.id}") { success error } }
   `);
 
   return {
@@ -192,12 +217,11 @@ If your tool needs functionality not exposed in Local's GraphQL API, add a mutat
 ```typescript
 const typeDefs = gql`
   input MyToolInput {
-    param1: String!
+    siteId: ID!
   }
 
   type MyToolResult {
     success: Boolean!
-    data: String
     error: String
   }
 
@@ -209,65 +233,29 @@ const typeDefs = gql`
 const resolvers = {
   Mutation: {
     myToolMutation: async (_parent, args) => {
-      const { param1 } = args.input;
+      const { siteId } = args.input;
+      const site = siteData.getSite(siteId);
       // Use internal services
-      return { success: true, data: 'result' };
+      return { success: true };
     },
   },
 };
 ```
 
-### Step 3: Add to SSE Transport (optional)
+### Step 3: Add Tests
 
-Create `src/main/mcp/tools/myNewTool.ts`:
+Create tests in `tests/` following existing patterns:
 
 ```typescript
-import { McpToolDefinition, McpToolResult, LocalServices } from '../../../common/types';
+describe('my_new_tool', () => {
+  it('should require site parameter', () => {
+    // Test input validation
+  });
 
-export const myNewToolDefinition: McpToolDefinition = {
-  name: 'my_new_tool',
-  description: 'Description of what this tool does',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      param1: {
-        type: 'string',
-        description: 'Description of param1',
-      },
-    },
-    required: ['param1'],
-  },
-};
-
-export async function myNewTool(
-  args: Record<string, unknown>,
-  services: LocalServices
-): Promise<McpToolResult> {
-  const { param1 } = args as { param1: string };
-
-  try {
-    // Direct service access
-    const result = { success: true };
-    return {
-      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-    };
-  } catch (error: any) {
-    return {
-      content: [{ type: 'text', text: `Error: ${error.message}` }],
-      isError: true,
-    };
-  }
-}
-```
-
-Register in `src/main/mcp/tools/index.ts`.
-
-### Step 4: Build and Test
-
-```bash
-npm run build
-# Restart Local (for SSE transport changes)
-# Test the new tool via Claude Code
+  it('should require confirmation for destructive operations', () => {
+    // Test confirm requirement
+  });
+});
 ```
 
 ## Local Services API
@@ -276,102 +264,118 @@ The `LocalServices` interface provides access to Local's internal services:
 
 ```typescript
 interface LocalServices {
+  // Core services
   siteData: {
-    getSites(): Record<string, any>;      // Get all sites
-    getSite(id: string): any | undefined; // Get site by ID
+    getSites(): Record<string, any>;
+    getSite(id: string): any | undefined;
+    updateSite?(siteID: string, site: Partial<{ name: string; xdebugEnabled: boolean }>): void;
   };
+
   siteProcessManager: {
     start(site: any): Promise<void>;
     stop(site: any): Promise<void>;
     restart(site: any): Promise<void>;
     getSiteStatus(site: any): Promise<string>;
   };
+
   wpCli: {
     run(site: any, args: string[], opts?: any): Promise<string | null>;
   };
+
   deleteSite: {
     deleteSite(opts: { site: any; trashFiles: boolean; updateHosts: boolean }): Promise<void>;
   };
+
   addSite: {
     addSite(opts: {
-      newSiteInfo: { siteName: string; siteDomain: string; sitePath: string; ... };
+      newSiteInfo: { siteName: string; siteDomain: string; ... };
       wpCredentials?: { adminUsername?: string; adminPassword?: string; adminEmail?: string };
-      goToSite?: boolean;
     }): Promise<any>;
   };
+
   localLogger: {
     info(message: string, ...args: any[]): void;
     warn(message: string, ...args: any[]): void;
     error(message: string, ...args: any[]): void;
   };
+
+  // Phase 8: Extended services
+  browserManager?: { openURL(url: string): Promise<void>; };
+  cloneSite?: (site: any, newName: string) => Promise<any>;
+  exportSite?: (site: any, outputPath: string) => Promise<void>;
+  blueprints?: { getBlueprints(): Promise<any[]>; saveBlueprint(...): Promise<any>; };
+  adminer?: { open(site: any): Promise<void>; };
+  x509Cert?: { trustCert(site: any): Promise<void>; };
+  siteProvisioner?: { swapService(...): Promise<void>; };
+  importSite?: { run(settings: { zipPath: string; siteName: string }): Promise<any>; };
+
+  // Phase 9: Lightning Services
+  lightningServices?: {
+    getRegisteredServices(role?: string): Record<string, Record<string, any>>;
+    getServices(role?: string): Promise<Record<string, Record<string, any>>>;
+  };
+
+  // Phase 10: Cloud Backups
+  backup?: {
+    createBackup(args: { site: any; provider: string; accountId: string; note?: string }): Promise<{ snapshotId: string; timestamp: string }>;
+    listBackups(args: { site: any; provider: string; accountId: string }): Promise<Array<{ snapshotId: string; timestamp: string; note?: string; ... }>>;
+    restoreBackup(args: { site: any; provider: string; accountId: string; snapshotId: string }): Promise<void>;
+    deleteBackup(args: { site: any; provider: string; accountId: string; snapshotId: string }): Promise<void>;
+    downloadZip(args: { ... }): Promise<string>;
+    editBackupDescription(args: { ... }): Promise<void>;
+  };
+  dropbox?: { isAuthenticated(accountId: string): Promise<boolean>; getAccount(accountId: string): Promise<{ id: string; email: string } | undefined>; };
+  googleDrive?: { isAuthenticated(accountId: string): Promise<boolean>; getAccount(accountId: string): Promise<{ id: string; email: string } | undefined>; };
+
+  // Phase 11: WP Engine Connect
+  wpeOAuth?: {
+    getAccessToken(): Promise<string | undefined>;
+    authenticate(): Promise<{ accessToken: string; refreshToken: string; idToken: string }>;
+    clearTokens(): Promise<void>;
+  };
+  capi?: {
+    getInstallList(): Promise<any[] | undefined>;
+    getAccountList(): Promise<any[] | undefined>;
+    getCurrentUser(): Promise<{ id?: string; email?: string } | undefined>;
+    getInstall(installId: string): Promise<{ id: string; name: string; ... } | undefined>;
+  };
+  wpePush?: {
+    push(args: { includeSql?: boolean; wpengineInstallName: string; ... }): Promise<void>;
+    pushDatabase(args: { ... }): Promise<void>;
+  };
+  wpePull?: {
+    pull(args: { includeSql?: boolean; wpengineInstallName: string; ... }): Promise<void>;
+    pullDatabase(args: { ... }): Promise<void>;
+  };
+  connectHistory?: {
+    getEvents(siteId: string): Array<{ remoteInstallName?: string; timestamp: number; ... }>;
+  };
+  wpeConnectBase?: {
+    listModifications(args: { connectArgs: { ... }; direction: 'push' | 'pull'; }): Promise<Array<{ path: string; type: string; ... }>>;
+  };
 }
 ```
-
-## MCP Protocol
-
-The server implements MCP protocol version `2024-11-05`.
-
-### Request Format
-
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "tools/call",
-  "params": {
-    "name": "list_sites",
-    "arguments": {}
-  }
-}
-```
-
-### Response Format
-
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "result": {
-    "content": [
-      {
-        "type": "text",
-        "text": "{ \"sites\": [...] }"
-      }
-    ]
-  }
-}
-```
-
-### Supported Methods
-
-| Method | Description |
-|--------|-------------|
-| `initialize` | Initialize MCP session |
-| `notifications/initialized` | Client ready notification |
-| `tools/list` | List available tools |
-| `tools/call` | Execute a tool |
-| `ping` | Health check |
-
-## Error Handling
-
-Tools should return errors in a consistent format:
-
-```typescript
-return {
-  content: [{
-    type: 'text',
-    text: 'Error: Descriptive error message. Suggestion for next steps.'
-  }],
-  isError: true,
-};
-```
-
-**Best practices:**
-- Always include helpful error messages
-- Suggest next steps when possible (e.g., "Start the site first")
-- Log errors to `services.localLogger`
 
 ## Testing
+
+### Running Tests
+
+```bash
+npm run test              # Run all tests (108 tests)
+npm run test:watch        # Watch mode
+npm run test:coverage     # With coverage report
+npm run test -- tests/security.test.ts  # Run specific file
+```
+
+### Test Categories
+
+| File | Tests | Purpose |
+|------|-------|---------|
+| `security.test.ts` | 25 | Security validations |
+| `phase10-tools.test.ts` | 17 | Cloud Backup tools |
+| `phase11-tools.test.ts` | 15 | WP Engine Connect tools |
+| `phase8-tools.test.ts` | 17 | Database/config tools |
+| `phase9-tools.test.ts` | 11 | Dev/debug tools |
 
 ### Testing stdio Transport
 
@@ -382,24 +386,6 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | node bin/mcp-stdio.js
 # Test tool execution
 echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_sites","arguments":{}}}' | node bin/mcp-stdio.js
 ```
-
-### Testing SSE Transport
-
-```bash
-# Health check
-curl http://127.0.0.1:10789/health
-
-# List tools
-TOKEN="your-auth-token"
-curl -X POST http://127.0.0.1:10789/mcp/messages \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
-```
-
-### Integration Testing
-
-Test with Claude Code to verify real-world behavior.
 
 ## Debugging
 
@@ -422,13 +408,6 @@ Add debug output to stderr (doesn't interfere with MCP protocol):
 console.error('[DEBUG] Processing request:', method);
 ```
 
-### Common Issues
-
-1. **GraphQL connection failed** - Local not running or connection info file missing
-2. **Tool not found** - Check tool is added to both definition array and switch statement
-3. **TypeScript errors** - Run `npm run build` to see compile errors
-4. **Token mismatch** - Token regenerates on Local restart; update Claude config
-
 ## Development Workflow
 
 ```bash
@@ -445,24 +424,6 @@ ln -sf "$(pwd)" "$HOME/Library/Application Support/Local/addons/local-addon-mcp-
 # - stdio changes: No restart needed
 # - Main process changes: Restart Local
 # - Renderer changes: Cmd+R in Local (with dev menu enabled)
-```
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test on macOS (and Windows/Linux if possible)
-5. Submit a pull request
-
-### Commit Messages
-
-Follow conventional commits:
-```
-feat: Add new tool for site export
-fix: Handle missing site gracefully
-docs: Update troubleshooting guide
-refactor: Simplify tool registration
 ```
 
 ## Resources
