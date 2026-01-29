@@ -140,18 +140,13 @@ export interface LocalServices {
   };
   // Phase 11: WP Engine Connect services
   wpeOAuth?: {
-    isAuthenticated(): Promise<boolean>;
-    authenticate(): Promise<{ email?: string } | null>;
-    logout(): Promise<void>;
-    getCredentials(): Promise<{
-      email?: string;
-      accountId?: string;
-      accountName?: string;
-      expiresAt?: number;
-    } | null>;
+    getAccessToken(): Promise<string | undefined>;
+    authenticate(): Promise<{ accessToken: string; refreshToken: string; idToken: string }>;
+    clearTokens(): Promise<void>;
   };
   capi?: {
-    getInstalls(accountId?: string): Promise<any[]>;
-    getAccounts(): Promise<any[]>;
+    getInstallList(): Promise<any[] | undefined>;
+    getAccountList(): Promise<any[] | undefined>;
+    getCurrentUser(): Promise<{ id?: string; email?: string } | undefined>;
   };
 }

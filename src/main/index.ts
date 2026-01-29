@@ -684,10 +684,10 @@ function createResolvers(services: any) {
             };
           }
 
-          // Check if we have valid credentials
-          const isAuthenticated = await wpeOAuthService.isAuthenticated();
+          // Check if we have valid credentials by trying to get access token
+          const accessToken = await wpeOAuthService.getAccessToken();
 
-          if (!isAuthenticated) {
+          if (!accessToken) {
             return {
               authenticated: false,
               email: null,
@@ -698,17 +698,23 @@ function createResolvers(services: any) {
             };
           }
 
-          // Get user info from stored credentials
-          const credentials = await wpeOAuthService.getCredentials();
+          // Try to get user info from CAPI if available
+          let email = null;
+          if (capiService) {
+            try {
+              const currentUser = await capiService.getCurrentUser();
+              email = currentUser?.email || null;
+            } catch {
+              // User info not available, but still authenticated
+            }
+          }
 
           return {
             authenticated: true,
-            email: credentials?.email || null,
-            accountId: credentials?.accountId || null,
-            accountName: credentials?.accountName || null,
-            tokenExpiry: credentials?.expiresAt
-              ? new Date(credentials.expiresAt).toISOString()
-              : null,
+            email,
+            accountId: null,
+            accountName: null,
+            tokenExpiry: null,
             error: null,
           };
         } catch (error: any) {
@@ -741,9 +747,9 @@ function createResolvers(services: any) {
             };
           }
 
-          // Check if authenticated
-          const isAuthenticated = await wpeOAuthService.isAuthenticated();
-          if (!isAuthenticated) {
+          // Check if authenticated by trying to get access token
+          const accessToken = await wpeOAuthService.getAccessToken();
+          if (!accessToken) {
             return {
               success: false,
               error: 'Not authenticated with WP Engine. Use wpe_authenticate first.',
@@ -761,19 +767,28 @@ function createResolvers(services: any) {
             };
           }
 
-          // Get installs from CAPI
-          const installs = await capiService.getInstalls(accountId);
+          // Get installs from CAPI using getInstallList
+          const installs = await capiService.getInstallList();
+
+          if (!installs) {
+            return {
+              success: true,
+              error: null,
+              sites: [],
+              count: 0,
+            };
+          }
 
           const sites = installs.map((install: any) => ({
-            id: install.id || install.installId,
+            id: install.id,
             name: install.name,
             environment: install.environment || 'production',
             phpVersion: install.phpVersion || null,
-            primaryDomain: install.primaryDomain || install.domain || null,
+            primaryDomain: install.primaryDomain || install.cname || null,
             accountId: install.accountId || accountId || null,
             accountName: install.accountName || null,
-            sftpHost: install.sftpHost || null,
-            sftpUser: install.sftpUser || null,
+            sftpHost: `${install.name}.ssh.wpengine.net`,
+            sftpUser: install.name,
           }));
 
           return {
@@ -1864,13 +1879,27 @@ function createResolvers(services: any) {
           }
 
           // Trigger OAuth flow - this will open browser for user consent
-          const result = await wpeOAuthService.authenticate();
+          // authenticate() returns OAuthTokens on success
+          const tokens = await wpeOAuthService.authenticate();
 
-          if (result && result.email) {
-            localLogger.info(`[${ADDON_NAME}] Successfully authenticated with WPE as ${result.email}`);
+          if (tokens && tokens.accessToken) {
+            // Try to get user email from CAPI
+            let email = null;
+            if (capiService) {
+              try {
+                const currentUser = await capiService.getCurrentUser();
+                email = currentUser?.email || null;
+              } catch {
+                // User info not available
+              }
+            }
+
+            localLogger.info(
+              `[${ADDON_NAME}] Successfully authenticated with WPE${email ? ` as ${email}` : ''}`
+            );
             return {
               success: true,
-              email: result.email,
+              email,
               message: 'Successfully authenticated with WP Engine',
               error: null,
             };
@@ -1905,7 +1934,8 @@ function createResolvers(services: any) {
             };
           }
 
-          await wpeOAuthService.logout();
+          // clearTokens() is the logout method
+          await wpeOAuthService.clearTokens();
 
           localLogger.info(`[${ADDON_NAME}] Successfully logged out from WPE`);
           return {
