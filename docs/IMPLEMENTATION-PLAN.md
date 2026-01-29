@@ -18,11 +18,11 @@
 | Phase 6: Distribution | ✅ Complete | 4/4 tasks |
 | Phase 7: Testing & Quality | ⚠️ Partial | 2/5 tasks |
 | Phase 8: WordPress Dev Tools | ✅ Complete | 7/7 tasks |
-| Phase 9: Site Config & Dev | 📋 Proposed | 0/6 tasks |
+| Phase 9: Site Config & Dev | ⚠️ Partial | 3/6 tasks |
 | Phase 10: Backup & Restore | 📋 Proposed | 0/3 tasks |
 | Phase 11: Connect/Sync | 📋 Proposed | 0/3 tasks |
 
-**Current Release:** v0.0.2 (21 tools)
+**Current Release:** v0.0.3 (24 tools)
 
 ---
 
@@ -489,18 +489,18 @@ src/
 
 ---
 
-## Phase 9: Site Configuration & Dev Tools (Proposed)
+## Phase 9: Site Configuration & Dev Tools ⚠️ Partial
 
 **Goal:** Developer workflow enhancements
 
 | Task | Tool | Priority | GraphQL Status | Status |
 |------|------|----------|----------------|--------|
 | 9.1 | `change_domain` | Medium | Needs work | ❌ |
-| 9.2 | `toggle_xdebug` | Medium | As-is | ❌ |
-| 9.3 | `get_site_logs` | Medium | As-is | ❌ |
+| 9.2 | `toggle_xdebug` | Medium | As-is | ✅ |
+| 9.3 | `get_site_logs` | Medium | As-is | ✅ |
 | 9.4 | `open_in_editor` | Low | As-is | ❌ |
 | 9.5 | `open_terminal` | Low | As-is | ❌ |
-| 9.6 | `list_services` | Low | As-is | ❌ |
+| 9.6 | `list_services` | Low | As-is | ✅ |
 
 ---
 
@@ -591,6 +591,12 @@ The following features are explicitly excluded:
 ---
 
 ## Changelog
+
+### 2026-01-28 (Update 7)
+- Phase 9 partial: 3 new Site Configuration & Dev Tools
+- Added: toggle_xdebug, get_site_logs, list_services
+- Total tools: 24 (up from 21)
+- Added Phase 9 tests (11 new test cases)
 
 ### 2026-01-28 (Update 6)
 - Phase 8 complete: 7 new WordPress Development Tools

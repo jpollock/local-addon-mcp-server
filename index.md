@@ -24,7 +24,7 @@ The [Model Context Protocol](https://modelcontextprotocol.io/) is an open standa
 ## Features
 
 - **Dual Transport Support**: Both stdio (for Claude Code) and SSE (for web-based tools)
-- **21 MCP Tools**: Complete site lifecycle and development workflow
+- **24 MCP Tools**: Complete site lifecycle and development workflow
 - **Secure**: Token-based authentication for SSE transport
 - **Dark Mode**: Seamless integration with Local's theme
 
@@ -88,6 +88,9 @@ Add to your Claude Code MCP settings:
 | `open_adminer` | Open Adminer database UI |
 | `change_php_version` | Change site PHP version |
 | `trust_ssl` | Trust site SSL certificate |
+| `toggle_xdebug` | Enable/disable Xdebug |
+| `get_site_logs` | Get PHP/Nginx/MySQL logs |
+| `list_services` | List available service versions |
 
 ### Blueprints & System
 | Tool | Description |

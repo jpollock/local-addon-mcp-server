@@ -26,6 +26,10 @@ import { trustSsl, trustSslDefinition } from './trustSsl';
 import { renameSite, renameSiteDefinition } from './renameSite';
 import { changePhpVersion, changePhpVersionDefinition } from './changePhpVersion';
 import { importSite, importSiteDefinition } from './importSite';
+// Phase 9: Site Configuration & Dev Tools
+import { toggleXdebug, toggleXdebugDefinition } from './toggleXdebug';
+import { getSiteLogs, getSiteLogsDefinition } from './getSiteLogs';
+import { listServices, listServicesDefinition } from './listServices';
 
 export type ToolHandler = (
   args: Record<string, unknown>,
@@ -78,6 +82,11 @@ export function registerTools(): void {
     handler: changePhpVersion,
   });
   tools.set('import_site', { definition: importSiteDefinition, handler: importSite });
+
+  // Phase 9: Site Configuration & Dev Tools
+  tools.set('toggle_xdebug', { definition: toggleXdebugDefinition, handler: toggleXdebug });
+  tools.set('get_site_logs', { definition: getSiteLogsDefinition, handler: getSiteLogs });
+  tools.set('list_services', { definition: listServicesDefinition, handler: listServices });
 }
 
 /**

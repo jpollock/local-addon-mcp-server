@@ -65,7 +65,7 @@ export interface LocalServices {
   siteData: {
     getSites(): any[];
     getSite(id: string): any | undefined;
-    updateSite?(siteID: string, site: Partial<{ name: string }>): void;
+    updateSite?(siteID: string, site: Partial<{ name: string; xdebugEnabled: boolean }>): void;
   };
   siteProcessManager: {
     start(site: any): Promise<void>;
@@ -132,5 +132,10 @@ export interface LocalServices {
   };
   importSite?: {
     run(settings: { importType?: string; zipPath: string; siteName: string }): Promise<any>;
+  };
+  // Phase 9 services
+  lightningServices?: {
+    getRegisteredServices(role?: string): Record<string, Record<string, any>>;
+    getServices(role?: string): Promise<Record<string, Record<string, any>>>;
   };
 }

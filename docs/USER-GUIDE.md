@@ -272,6 +272,44 @@ Import a WordPress site from a zip file.
 Import the site from /path/to/export.zip
 ```
 
+## Development & Debugging Tools
+
+### toggle_xdebug
+Enable or disable Xdebug for a site.
+
+**Parameters:**
+- `site` (required): Site name or ID
+- `enabled` (required): True to enable, false to disable
+
+**Example:**
+```
+Enable Xdebug for my-blog
+```
+
+### get_site_logs
+Get log file contents for a site.
+
+**Parameters:**
+- `site` (required): Site name or ID
+- `logType` (optional): Type of logs - "php", "nginx", "mysql", or "all" (default: php)
+- `lines` (optional): Number of lines to return (default: 100)
+
+**Example:**
+```
+Show me the last 50 lines of PHP error logs for my-blog
+```
+
+### list_services
+List available service versions (PHP, MySQL, Nginx).
+
+**Parameters:**
+- `type` (optional): Filter by type - "php", "database", "webserver", or "all" (default: all)
+
+**Example:**
+```
+What PHP versions are available?
+```
+
 ## Troubleshooting
 
 ### Connection Refused
