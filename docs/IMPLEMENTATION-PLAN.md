@@ -17,6 +17,12 @@
 | Phase 5: Expanded Tools | ✅ Complete | 5/6 tasks |
 | Phase 6: Distribution | ✅ Complete | 4/4 tasks |
 | Phase 7: Testing & Quality | ⚠️ Partial | 2/5 tasks |
+| Phase 8: WordPress Dev Tools | 📋 Proposed | 0/7 tasks |
+| Phase 9: Site Config & Dev | 📋 Proposed | 0/6 tasks |
+| Phase 10: Backup & Restore | 📋 Proposed | 0/3 tasks |
+| Phase 11: Connect/Sync | 📋 Proposed | 0/3 tasks |
+
+**Current Release:** v0.0.1 (14 tools)
 
 ---
 
@@ -467,22 +473,98 @@ src/
 
 ---
 
+## Phase 8: WordPress Development Tools (Proposed)
+
+**Goal:** High-value tools for WordPress development workflow
+
+| Task | Tool | Priority | GraphQL Status | Status |
+|------|------|----------|----------------|--------|
+| 8.1 | `import_site` | High | Needs work | ❌ |
+| 8.2 | `export_database` | High | As-is (WP-CLI) | ❌ |
+| 8.3 | `import_database` | High | As-is (WP-CLI) | ❌ |
+| 8.4 | `open_adminer` | High | As-is | ❌ |
+| 8.5 | `rename_site` | Medium | Needs work | ❌ |
+| 8.6 | `change_php_version` | Medium | Needs work | ❌ |
+| 8.7 | `trust_ssl` | Medium | As-is | ❌ |
+
+---
+
+## Phase 9: Site Configuration & Dev Tools (Proposed)
+
+**Goal:** Developer workflow enhancements
+
+| Task | Tool | Priority | GraphQL Status | Status |
+|------|------|----------|----------------|--------|
+| 9.1 | `change_domain` | Medium | Needs work | ❌ |
+| 9.2 | `toggle_xdebug` | Medium | As-is | ❌ |
+| 9.3 | `get_site_logs` | Medium | As-is | ❌ |
+| 9.4 | `open_in_editor` | Low | As-is | ❌ |
+| 9.5 | `open_terminal` | Low | As-is | ❌ |
+| 9.6 | `list_services` | Low | As-is | ❌ |
+
+---
+
+## Phase 10: Backup & Restore (Proposed)
+
+**Goal:** Backup management (requires `localBackups` feature flag)
+
+| Task | Tool | Priority | GraphQL Status | Status |
+|------|------|----------|----------------|--------|
+| 10.1 | `create_backup` | Medium | Needs work | ❌ |
+| 10.2 | `list_backups` | Medium | Needs work | ❌ |
+| 10.3 | `restore_backup` | Medium | Needs work | ❌ |
+
+---
+
+## Phase 11: Connect/Sync (Conditional)
+
+**Goal:** Hosting provider integration (requires user authentication)
+
+| Task | Tool | Priority | GraphQL Status | Status |
+|------|------|----------|----------------|--------|
+| 11.1 | `list_remote_sites` | Low | Needs work | ❌ |
+| 11.2 | `push_site` | Low | Needs work | ❌ |
+| 11.3 | `pull_site` | Low | Needs work | ❌ |
+
+**Note:** Defer unless specifically requested. High complexity and security considerations.
+
+---
+
+## Not Recommended for MCP
+
+The following features are explicitly excluded:
+- **Account management** - Security (OAuth tokens, credentials)
+- **Cloud storage auth** - Security (Dropbox/GDrive OAuth)
+- **Feature flag changes** - Admin-level, could break app
+- **Addon management** - Complex lifecycle, user control preferred
+- **Settings changes** - Global app settings, user preference
+- **Hosts file edits** - Security risk
+- **Router daemon control** - System-level, dangerous
+
+---
+
 ## Next Steps (Recommended Priority)
 
-### High Priority
-1. **Test on Windows and Linux** - Verify cross-platform compatibility (Phase 7.1)
-2. **End-to-end test all 14 tools** - Verify each tool works correctly
-3. **Create first release** - `git tag v0.0.1 && git push --tags`
+### Immediate
+1. **v0.0.1 Released** - ✅ Complete
+2. **Test on Windows and Linux** - Verify cross-platform compatibility (Phase 7.1)
+3. **End-to-end test all 14 tools** - Verify each tool works correctly
 
-### Medium Priority
-4. **Add more unit tests** - Increase code coverage (Phase 7.2)
-5. **Add import_site tool** - Import from zip/blueprint (Phase 5.3 - deferred)
-6. **Add site_shell tool** - Shell command execution (Phase 5.5 - deferred)
+### Short-term (Phase 8 Quick Wins)
+4. **Add `export_database`** - Use WP-CLI `db export` (no GraphQL changes)
+5. **Add `import_database`** - Use WP-CLI `db import` (no GraphQL changes)
+6. **Add `open_adminer`** - Browser URL open (no GraphQL changes)
+7. **Add `open_in_editor`** - Shell command (no GraphQL changes)
 
-### Low Priority
-7. **Local Addon Marketplace submission** - Official distribution
-8. **Add auto-update mechanism** - Version notification in UI
-9. **Add documentation site** - GitHub Pages deployment
+### Medium-term
+8. **Add `import_site`** - Import from zip (requires GraphQL work)
+9. **Add `trust_ssl`** - Service exists (minimal work)
+10. **Add `toggle_xdebug`** - Service exists (minimal work)
+
+### Long-term
+11. **Phase 10: Backup tools** - If feature flag enabled
+12. **Phase 11: Connect tools** - If user demand exists
+13. **Local Addon Marketplace** - Official distribution
 
 ---
 
@@ -509,6 +591,16 @@ src/
 ---
 
 ## Changelog
+
+### 2026-01-28 (Update 5)
+- Added Phases 8-11 roadmap based on Local feature analysis
+- Phase 8: WordPress Development Tools (import, DB ops, SSL, PHP version)
+- Phase 9: Site Configuration & Dev Tools (domain, xdebug, logs, editor)
+- Phase 10: Backup & Restore (feature flag dependent)
+- Phase 11: Connect/Sync (conditional, deferred)
+- Added "Not Recommended" section with excluded features
+- Updated Next Steps with prioritized roadmap
+- v0.0.1 released to GitHub
 
 ### 2026-01-28 (Update 4)
 - Phase 6 marked complete (4/4 tasks)

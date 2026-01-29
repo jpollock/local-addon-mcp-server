@@ -377,6 +377,53 @@ For stdio transport, configure Claude Code with:
 3. **Timeout handling:** 30 second default timeout for tool execution
 4. **Streaming output:** Not implemented; commands wait for completion
 
+## Future Phases (Proposed)
+
+Based on analysis of Local's full feature set, the following phases are proposed for future development:
+
+### Phase 8: WordPress Development Tools
+| ID | Requirement | Priority | GraphQL Status |
+|----|-------------|----------|----------------|
+| FR-8.1 | `import_site` - Import site from zip file | High | Needs work |
+| FR-8.2 | `export_database` - Export database to SQL file | High | As-is (WP-CLI) |
+| FR-8.3 | `import_database` - Import SQL file to database | High | As-is (WP-CLI) |
+| FR-8.4 | `open_adminer` - Open database admin UI | High | As-is |
+| FR-8.5 | `rename_site` - Rename a site | Medium | Needs work |
+| FR-8.6 | `change_php_version` - Change site PHP version | Medium | Needs work |
+| FR-8.7 | `trust_ssl` - Trust site SSL certificate | Medium | As-is |
+
+### Phase 9: Site Configuration & Dev Tools
+| ID | Requirement | Priority | GraphQL Status |
+|----|-------------|----------|----------------|
+| FR-9.1 | `change_domain` - Change site domain | Medium | Needs work |
+| FR-9.2 | `toggle_xdebug` - Enable/disable Xdebug | Medium | As-is |
+| FR-9.3 | `get_site_logs` - Retrieve site log files | Medium | As-is |
+| FR-9.4 | `open_in_editor` - Open site in VS Code | Low | As-is |
+| FR-9.5 | `open_terminal` - Open terminal at site path | Low | As-is |
+| FR-9.6 | `list_services` - List available PHP/MySQL/Nginx versions | Low | As-is |
+
+### Phase 10: Backup & Restore (Feature Flag Dependent)
+| ID | Requirement | Priority | GraphQL Status |
+|----|-------------|----------|----------------|
+| FR-10.1 | `create_backup` - Create site backup | Medium | Needs work |
+| FR-10.2 | `list_backups` - List available backups | Medium | Needs work |
+| FR-10.3 | `restore_backup` - Restore from backup | Medium | Needs work |
+
+### Phase 11: Connect/Sync (Conditional)
+| ID | Requirement | Priority | GraphQL Status |
+|----|-------------|----------|----------------|
+| FR-11.1 | `list_remote_sites` - List WPE/Flywheel sites | Low | Needs work |
+| FR-11.2 | `push_site` - Push to hosting provider | Low | Needs work |
+| FR-11.3 | `pull_site` - Pull from hosting provider | Low | Needs work |
+
+### Not Recommended for MCP
+The following features are explicitly excluded due to security or complexity concerns:
+- Account/OAuth management
+- Cloud storage authentication
+- Feature flag modifications
+- Addon lifecycle management
+- System-level operations (hosts file, router daemon)
+
 ## References
 
 - [MCP Specification](https://spec.modelcontextprotocol.io/)
