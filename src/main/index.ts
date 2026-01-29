@@ -433,6 +433,8 @@ function createResolvers(services: any) {
     siteProvisioner,
     importSite: importSiteService,
     lightningServices,
+    siteDatabase,
+    importSQLFile: importSQLFileService,
   } = services;
 
   // Shared WP-CLI execution logic
@@ -936,11 +938,16 @@ function createResolvers(services: any) {
 
           localLogger.info(`[${ADDON_NAME}] Exporting database for ${site.name} to ${finalPath}`);
 
-          // Use WP-CLI db export
-          await wpCli.run(site, ['db', 'export', finalPath], {
-            skipPlugins: true,
-            skipThemes: true,
-          });
+          // Use siteDatabase.dump() which properly sets up MySQL environment
+          if (!siteDatabase) {
+            return {
+              success: false,
+              error: 'Database service not available',
+              outputPath: null,
+            };
+          }
+
+          await siteDatabase.dump(site, finalPath);
 
           localLogger.info(`[${ADDON_NAME}] Successfully exported database to: ${finalPath}`);
 
@@ -984,11 +991,15 @@ function createResolvers(services: any) {
 
           localLogger.info(`[${ADDON_NAME}] Importing database for ${site.name} from ${sqlPath}`);
 
-          // Use WP-CLI db import
-          await wpCli.run(site, ['db', 'import', sqlPath], {
-            skipPlugins: true,
-            skipThemes: true,
-          });
+          // Use importSQLFile service which properly sets up MySQL environment
+          if (!importSQLFileService) {
+            return {
+              success: false,
+              error: 'Import SQL file service not available',
+            };
+          }
+
+          await importSQLFileService(site, sqlPath);
 
           localLogger.info(`[${ADDON_NAME}] Successfully imported database from: ${sqlPath}`);
 
