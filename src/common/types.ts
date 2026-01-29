@@ -262,16 +262,18 @@ export interface LocalServices {
     }): Promise<void>;
   };
   dropbox?: {
-    isAuthenticated(accountId?: string): Promise<boolean>;
+    isAuthenticated(accountId: string): Promise<boolean>;
     getAccount(accountId: string): Promise<{ id: string; email: string } | undefined>;
-    getAccounts(): Promise<Array<{ id: string; email: string }>>;
   };
   googleDrive?: {
-    isAuthenticated(accountId?: string): Promise<boolean>;
+    isAuthenticated(accountId: string): Promise<boolean>;
     getAccount(accountId: string): Promise<{ id: string; email: string } | undefined>;
-    getAccounts(): Promise<Array<{ id: string; email: string }>>;
   };
   featureFlags?: {
     isFeatureEnabled(flag: string): boolean;
+  };
+  // UserData for reading cloud storage accounts
+  userData?: {
+    get(opts: { name: string; defaults: any; includeCreatedTime?: boolean; persistDefaults?: boolean; persistDefaultsEncrypted?: boolean }): any;
   };
 }

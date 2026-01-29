@@ -833,7 +833,26 @@ function createResolvers(services: any) {
     dropbox: dropboxService,
     googleDrive: googleDriveService,
     featureFlags: featureFlagsService,
+    userData,
   } = services;
+
+  // Helper to read cloud storage accounts from userData
+  const getCloudStorageAccounts = (provider: 'dropbox' | 'googleDrive'): Array<{ id: string; email: string }> => {
+    if (!userData) return [];
+    const storageKey = provider === 'dropbox' ? 'dropboxAccounts' : 'googleDriveAccounts';
+    try {
+      const accounts = userData.get({
+        name: storageKey,
+        defaults: [],
+        includeCreatedTime: false,
+        persistDefaults: false,
+        persistDefaultsEncrypted: true,
+      });
+      return Array.isArray(accounts) ? accounts : [];
+    } catch {
+      return [];
+    }
+  };
 
   // Shared WP-CLI execution logic
   const executeWpCli = async (
@@ -1256,38 +1275,26 @@ function createResolvers(services: any) {
             };
           }
 
-          // Check Dropbox authentication
-          let dropboxStatus = { authenticated: false, accountId: null, email: null };
-          if (dropboxService) {
-            try {
-              const accounts = await dropboxService.getAccounts();
-              if (accounts && accounts.length > 0) {
-                dropboxStatus = {
-                  authenticated: true,
-                  accountId: accounts[0].id,
-                  email: accounts[0].email,
-                };
-              }
-            } catch {
-              // Not authenticated
-            }
+          // Check Dropbox authentication using userData
+          let dropboxStatus = { authenticated: false, accountId: null as string | null, email: null as string | null };
+          const dropboxAccounts = getCloudStorageAccounts('dropbox');
+          if (dropboxAccounts.length > 0) {
+            dropboxStatus = {
+              authenticated: true,
+              accountId: dropboxAccounts[0].id,
+              email: dropboxAccounts[0].email,
+            };
           }
 
-          // Check Google Drive authentication
-          let googleDriveStatus = { authenticated: false, accountId: null, email: null };
-          if (googleDriveService) {
-            try {
-              const accounts = await googleDriveService.getAccounts();
-              if (accounts && accounts.length > 0) {
-                googleDriveStatus = {
-                  authenticated: true,
-                  accountId: accounts[0].id,
-                  email: accounts[0].email,
-                };
-              }
-            } catch {
-              // Not authenticated
-            }
+          // Check Google Drive authentication using userData
+          let googleDriveStatus = { authenticated: false, accountId: null as string | null, email: null as string | null };
+          const googleDriveAccounts = getCloudStorageAccounts('googleDrive');
+          if (googleDriveAccounts.length > 0) {
+            googleDriveStatus = {
+              authenticated: true,
+              accountId: googleDriveAccounts[0].id,
+              email: googleDriveAccounts[0].email,
+            };
           }
 
           const hasProvider = dropboxStatus.authenticated || googleDriveStatus.authenticated;
@@ -1368,21 +1375,9 @@ function createResolvers(services: any) {
             };
           }
 
-          // Get account ID for provider
-          const providerService = provider === 'dropbox' ? dropboxService : googleDriveService;
-          if (!providerService) {
-            return {
-              success: false,
-              siteName: site.name,
-              provider,
-              backups: [],
-              count: 0,
-              error: `${provider} service not available`,
-            };
-          }
-
-          const accounts = await providerService.getAccounts();
-          if (!accounts || accounts.length === 0) {
+          // Get account ID for provider using userData
+          const accounts = getCloudStorageAccounts(provider as 'dropbox' | 'googleDrive');
+          if (accounts.length === 0) {
             return {
               success: false,
               siteName: site.name,
@@ -2771,19 +2766,9 @@ function createResolvers(services: any) {
           }
 
           // Get account ID for provider
-          const providerService = provider === 'dropbox' ? dropboxService : googleDriveService;
-          if (!providerService) {
-            return {
-              success: false,
-              snapshotId: null,
-              timestamp: null,
-              message: null,
-              error: `${provider} service not available`,
-            };
-          }
-
-          const accounts = await providerService.getAccounts();
-          if (!accounts || accounts.length === 0) {
+          // Get account ID for provider using userData
+          const accounts = getCloudStorageAccounts(provider as 'dropbox' | 'googleDrive');
+          if (accounts.length === 0) {
             return {
               success: false,
               snapshotId: null,
@@ -2874,18 +2859,9 @@ function createResolvers(services: any) {
             };
           }
 
-          // Get account ID for provider
-          const providerService = provider === 'dropbox' ? dropboxService : googleDriveService;
-          if (!providerService) {
-            return {
-              success: false,
-              message: null,
-              error: `${provider} service not available`,
-            };
-          }
-
-          const accounts = await providerService.getAccounts();
-          if (!accounts || accounts.length === 0) {
+          // Get account ID for provider using userData
+          const accounts = getCloudStorageAccounts(provider as 'dropbox' | 'googleDrive');
+          if (accounts.length === 0) {
             return {
               success: false,
               message: null,
@@ -2975,19 +2951,9 @@ function createResolvers(services: any) {
             };
           }
 
-          // Get account ID for provider
-          const providerService = provider === 'dropbox' ? dropboxService : googleDriveService;
-          if (!providerService) {
-            return {
-              success: false,
-              deletedSnapshotId: null,
-              message: null,
-              error: `${provider} service not available`,
-            };
-          }
-
-          const accounts = await providerService.getAccounts();
-          if (!accounts || accounts.length === 0) {
+          // Get account ID for provider using userData
+          const accounts = getCloudStorageAccounts(provider as 'dropbox' | 'googleDrive');
+          if (accounts.length === 0) {
             return {
               success: false,
               deletedSnapshotId: null,
@@ -3070,19 +3036,9 @@ function createResolvers(services: any) {
             };
           }
 
-          // Get account ID for provider
-          const providerService = provider === 'dropbox' ? dropboxService : googleDriveService;
-          if (!providerService) {
-            return {
-              success: false,
-              filePath: null,
-              message: null,
-              error: `${provider} service not available`,
-            };
-          }
-
-          const accounts = await providerService.getAccounts();
-          if (!accounts || accounts.length === 0) {
+          // Get account ID for provider using userData
+          const accounts = getCloudStorageAccounts(provider as 'dropbox' | 'googleDrive');
+          if (accounts.length === 0) {
             return {
               success: false,
               filePath: null,
@@ -3165,19 +3121,9 @@ function createResolvers(services: any) {
             };
           }
 
-          // Get account ID for provider
-          const providerService = provider === 'dropbox' ? dropboxService : googleDriveService;
-          if (!providerService) {
-            return {
-              success: false,
-              snapshotId: null,
-              note: null,
-              error: `${provider} service not available`,
-            };
-          }
-
-          const accounts = await providerService.getAccounts();
-          if (!accounts || accounts.length === 0) {
+          // Get account ID for provider using userData
+          const accounts = getCloudStorageAccounts(provider as 'dropbox' | 'googleDrive');
+          if (accounts.length === 0) {
             return {
               success: false,
               snapshotId: null,
