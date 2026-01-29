@@ -592,6 +592,13 @@ The following features are explicitly excluded:
 
 ## Changelog
 
+### 2026-01-28 (Update 8)
+- **CRITICAL FIX**: Updated stdio transport (`bin/mcp-stdio.js`) with all 24 tools
+- Previously, stdio transport only had 14 tools (Phase 1-5)
+- Now both stdio and SSE transports have full 24-tool feature parity
+- Added GraphQL types and resolvers for Phase 8-9 tools in main/index.ts
+- This fix enables Claude Code to use all tools (toggle_xdebug, export_database, etc.)
+
 ### 2026-01-28 (Update 7)
 - Phase 9 partial: 3 new Site Configuration & Dev Tools
 - Added: toggle_xdebug, get_site_logs, list_services

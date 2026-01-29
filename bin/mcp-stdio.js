@@ -303,6 +303,181 @@ const tools = [
       required: ['site', 'name'],
     },
   },
+  // Phase 8: WordPress Development Tools
+  {
+    name: 'export_database',
+    description: 'Export a site database to a SQL file',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        site: {
+          type: 'string',
+          description: 'Site name or ID',
+        },
+        output_path: {
+          type: 'string',
+          description: 'Output file path (default: ~/Downloads/<site-name>.sql)',
+        },
+      },
+      required: ['site'],
+    },
+  },
+  {
+    name: 'import_database',
+    description: 'Import a SQL file into a site database',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        site: {
+          type: 'string',
+          description: 'Site name or ID',
+        },
+        sql_path: {
+          type: 'string',
+          description: 'Path to the SQL file to import',
+        },
+      },
+      required: ['site', 'sql_path'],
+    },
+  },
+  {
+    name: 'open_adminer',
+    description: 'Open Adminer database management UI for a site',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        site: {
+          type: 'string',
+          description: 'Site name or ID',
+        },
+      },
+      required: ['site'],
+    },
+  },
+  {
+    name: 'trust_ssl',
+    description: 'Trust the SSL certificate for a site (may require admin password)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        site: {
+          type: 'string',
+          description: 'Site name or ID',
+        },
+      },
+      required: ['site'],
+    },
+  },
+  {
+    name: 'rename_site',
+    description: 'Rename a WordPress site',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        site: {
+          type: 'string',
+          description: 'Current site name or ID',
+        },
+        new_name: {
+          type: 'string',
+          description: 'New name for the site',
+        },
+      },
+      required: ['site', 'new_name'],
+    },
+  },
+  {
+    name: 'change_php_version',
+    description: 'Change the PHP version for a site',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        site: {
+          type: 'string',
+          description: 'Site name or ID',
+        },
+        php_version: {
+          type: 'string',
+          description: 'Target PHP version (e.g., "8.2.10", "8.1.27")',
+        },
+      },
+      required: ['site', 'php_version'],
+    },
+  },
+  {
+    name: 'import_site',
+    description: 'Import a WordPress site from a zip file',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        zip_path: {
+          type: 'string',
+          description: 'Path to the zip file to import',
+        },
+        site_name: {
+          type: 'string',
+          description: 'Name for the imported site (optional)',
+        },
+      },
+      required: ['zip_path'],
+    },
+  },
+  // Phase 9: Site Configuration & Dev Tools
+  {
+    name: 'toggle_xdebug',
+    description: 'Enable or disable Xdebug for a site',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        site: {
+          type: 'string',
+          description: 'Site name or ID',
+        },
+        enabled: {
+          type: 'boolean',
+          description: 'True to enable, false to disable',
+        },
+      },
+      required: ['site', 'enabled'],
+    },
+  },
+  {
+    name: 'get_site_logs',
+    description: 'Get log file contents for a site',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        site: {
+          type: 'string',
+          description: 'Site name or ID',
+        },
+        log_type: {
+          type: 'string',
+          enum: ['php', 'nginx', 'mysql', 'all'],
+          description: 'Type of logs to retrieve (default: php)',
+        },
+        lines: {
+          type: 'number',
+          description: 'Number of lines to return (default: 100)',
+        },
+      },
+      required: ['site'],
+    },
+  },
+  {
+    name: 'list_services',
+    description: 'List available service versions (PHP, MySQL, Nginx)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        type: {
+          type: 'string',
+          enum: ['php', 'database', 'webserver', 'all'],
+          description: 'Filter by service type (default: all)',
+        },
+      },
+    },
+  },
 ];
 
 // Find site by name or ID
@@ -801,6 +976,431 @@ async function handleTool(name, args) {
         content: [{
           type: 'text',
           text: `Saved ${site.name} as blueprint: ${result.blueprintName}\n\nYou can now create new sites from this blueprint.`,
+        }],
+      };
+    }
+
+    // Phase 8: WordPress Development Tools
+    case 'export_database': {
+      const site = await findSite(args.site);
+      if (!site) {
+        return {
+          content: [{ type: 'text', text: `Site not found: ${args.site}` }],
+          isError: true,
+        };
+      }
+
+      const data = await graphqlRequest(`
+        mutation($input: ExportDatabaseInput!) {
+          exportDatabase(input: $input) {
+            success
+            error
+            outputPath
+          }
+        }
+      `, {
+        input: {
+          siteId: site.id,
+          outputPath: args.output_path || null,
+        },
+      });
+
+      const result = data.exportDatabase;
+      if (!result.success) {
+        return {
+          content: [{ type: 'text', text: `Failed to export database: ${result.error}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: `Exported database for ${site.name} to:\n${result.outputPath}`,
+        }],
+      };
+    }
+
+    case 'import_database': {
+      const site = await findSite(args.site);
+      if (!site) {
+        return {
+          content: [{ type: 'text', text: `Site not found: ${args.site}` }],
+          isError: true,
+        };
+      }
+
+      if (!args.sql_path) {
+        return {
+          content: [{ type: 'text', text: 'Error: sql_path is required' }],
+          isError: true,
+        };
+      }
+
+      const data = await graphqlRequest(`
+        mutation($input: ImportDatabaseInput!) {
+          importDatabase(input: $input) {
+            success
+            error
+          }
+        }
+      `, {
+        input: {
+          siteId: site.id,
+          sqlPath: args.sql_path,
+        },
+      });
+
+      const result = data.importDatabase;
+      if (!result.success) {
+        return {
+          content: [{ type: 'text', text: `Failed to import database: ${result.error}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: `Successfully imported database into ${site.name} from:\n${args.sql_path}`,
+        }],
+      };
+    }
+
+    case 'open_adminer': {
+      const site = await findSite(args.site);
+      if (!site) {
+        return {
+          content: [{ type: 'text', text: `Site not found: ${args.site}` }],
+          isError: true,
+        };
+      }
+
+      const data = await graphqlRequest(`
+        mutation($input: OpenAdminerInput!) {
+          openAdminer(input: $input) {
+            success
+            error
+          }
+        }
+      `, {
+        input: {
+          siteId: site.id,
+        },
+      });
+
+      const result = data.openAdminer;
+      if (!result.success) {
+        return {
+          content: [{ type: 'text', text: `Failed to open Adminer: ${result.error}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: `Opened Adminer for ${site.name}`,
+        }],
+      };
+    }
+
+    case 'trust_ssl': {
+      const site = await findSite(args.site);
+      if (!site) {
+        return {
+          content: [{ type: 'text', text: `Site not found: ${args.site}` }],
+          isError: true,
+        };
+      }
+
+      const data = await graphqlRequest(`
+        mutation($input: TrustSslInput!) {
+          trustSsl(input: $input) {
+            success
+            error
+          }
+        }
+      `, {
+        input: {
+          siteId: site.id,
+        },
+      });
+
+      const result = data.trustSsl;
+      if (!result.success) {
+        return {
+          content: [{ type: 'text', text: `Failed to trust SSL: ${result.error}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: `Trusted SSL certificate for ${site.name}`,
+        }],
+      };
+    }
+
+    case 'rename_site': {
+      const site = await findSite(args.site);
+      if (!site) {
+        return {
+          content: [{ type: 'text', text: `Site not found: ${args.site}` }],
+          isError: true,
+        };
+      }
+
+      if (!args.new_name) {
+        return {
+          content: [{ type: 'text', text: 'Error: new_name is required' }],
+          isError: true,
+        };
+      }
+
+      const data = await graphqlRequest(`
+        mutation($input: RenameSiteInput!) {
+          renameSite(input: $input) {
+            success
+            error
+            newName
+          }
+        }
+      `, {
+        input: {
+          siteId: site.id,
+          newName: args.new_name,
+        },
+      });
+
+      const result = data.renameSite;
+      if (!result.success) {
+        return {
+          content: [{ type: 'text', text: `Failed to rename site: ${result.error}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: `Renamed ${site.name} to ${result.newName}`,
+        }],
+      };
+    }
+
+    case 'change_php_version': {
+      const site = await findSite(args.site);
+      if (!site) {
+        return {
+          content: [{ type: 'text', text: `Site not found: ${args.site}` }],
+          isError: true,
+        };
+      }
+
+      if (!args.php_version) {
+        return {
+          content: [{ type: 'text', text: 'Error: php_version is required' }],
+          isError: true,
+        };
+      }
+
+      const data = await graphqlRequest(`
+        mutation($input: ChangePhpVersionInput!) {
+          changePhpVersion(input: $input) {
+            success
+            error
+            phpVersion
+          }
+        }
+      `, {
+        input: {
+          siteId: site.id,
+          phpVersion: args.php_version,
+        },
+      });
+
+      const result = data.changePhpVersion;
+      if (!result.success) {
+        return {
+          content: [{ type: 'text', text: `Failed to change PHP version: ${result.error}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: `Changed PHP version for ${site.name} to ${result.phpVersion}`,
+        }],
+      };
+    }
+
+    case 'import_site': {
+      if (!args.zip_path) {
+        return {
+          content: [{ type: 'text', text: 'Error: zip_path is required' }],
+          isError: true,
+        };
+      }
+
+      const data = await graphqlRequest(`
+        mutation($input: ImportSiteInput!) {
+          importSite(input: $input) {
+            success
+            error
+            siteId
+            siteName
+          }
+        }
+      `, {
+        input: {
+          zipPath: args.zip_path,
+          siteName: args.site_name || null,
+        },
+      });
+
+      const result = data.importSite;
+      if (!result.success) {
+        return {
+          content: [{ type: 'text', text: `Failed to import site: ${result.error}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: `Imported site: ${result.siteName}\nSite ID: ${result.siteId}`,
+        }],
+      };
+    }
+
+    // Phase 9: Site Configuration & Dev Tools
+    case 'toggle_xdebug': {
+      const site = await findSite(args.site);
+      if (!site) {
+        return {
+          content: [{ type: 'text', text: `Site not found: ${args.site}` }],
+          isError: true,
+        };
+      }
+
+      if (typeof args.enabled !== 'boolean') {
+        return {
+          content: [{ type: 'text', text: 'Error: enabled must be true or false' }],
+          isError: true,
+        };
+      }
+
+      const data = await graphqlRequest(`
+        mutation($input: ToggleXdebugInput!) {
+          toggleXdebug(input: $input) {
+            success
+            error
+            enabled
+          }
+        }
+      `, {
+        input: {
+          siteId: site.id,
+          enabled: args.enabled,
+        },
+      });
+
+      const result = data.toggleXdebug;
+      if (!result.success) {
+        return {
+          content: [{ type: 'text', text: `Failed to toggle Xdebug: ${result.error}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: `Xdebug ${result.enabled ? 'enabled' : 'disabled'} for ${site.name}`,
+        }],
+      };
+    }
+
+    case 'get_site_logs': {
+      const site = await findSite(args.site);
+      if (!site) {
+        return {
+          content: [{ type: 'text', text: `Site not found: ${args.site}` }],
+          isError: true,
+        };
+      }
+
+      const data = await graphqlRequest(`
+        mutation($input: GetSiteLogsInput!) {
+          getSiteLogs(input: $input) {
+            success
+            error
+            logs {
+              type
+              content
+              path
+            }
+          }
+        }
+      `, {
+        input: {
+          siteId: site.id,
+          logType: args.log_type || 'php',
+          lines: args.lines || 100,
+        },
+      });
+
+      const result = data.getSiteLogs;
+      if (!result.success) {
+        return {
+          content: [{ type: 'text', text: `Failed to get logs: ${result.error}` }],
+          isError: true,
+        };
+      }
+
+      let output = `Logs for ${site.name}:\n`;
+      for (const log of result.logs) {
+        output += `\n=== ${log.type.toUpperCase()} (${log.path}) ===\n${log.content}\n`;
+      }
+
+      return {
+        content: [{ type: 'text', text: output }],
+      };
+    }
+
+    case 'list_services': {
+      const data = await graphqlRequest(`
+        query($type: String) {
+          listServices(type: $type) {
+            success
+            error
+            services {
+              role
+              name
+              version
+            }
+          }
+        }
+      `, {
+        type: args.type || 'all',
+      });
+
+      const result = data.listServices;
+      if (!result.success) {
+        return {
+          content: [{ type: 'text', text: `Failed to list services: ${result.error}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({ services: result.services, count: result.services.length }, null, 2),
         }],
       };
     }

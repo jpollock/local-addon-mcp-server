@@ -179,6 +179,173 @@ const typeDefs = gql`
     blueprintName: String
   }
 
+  # Phase 8: WordPress Development Tools
+  input ExportDatabaseInput {
+    "The site ID"
+    siteId: ID!
+    "Output file path (optional, defaults to ~/Downloads/<site-name>.sql)"
+    outputPath: String
+  }
+
+  type ExportDatabaseResult {
+    "Whether export was successful"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+    "Path to the exported SQL file"
+    outputPath: String
+  }
+
+  input ImportDatabaseInput {
+    "The site ID"
+    siteId: ID!
+    "Path to the SQL file to import"
+    sqlPath: String!
+  }
+
+  type ImportDatabaseResult {
+    "Whether import was successful"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+  }
+
+  input OpenAdminerInput {
+    "The site ID"
+    siteId: ID!
+  }
+
+  type OpenAdminerResult {
+    "Whether opening was successful"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+  }
+
+  input TrustSslInput {
+    "The site ID"
+    siteId: ID!
+  }
+
+  type TrustSslResult {
+    "Whether trust was successful"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+  }
+
+  input RenameSiteInput {
+    "The site ID"
+    siteId: ID!
+    "New name for the site"
+    newName: String!
+  }
+
+  type RenameSiteResult {
+    "Whether rename was successful"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+    "The new name"
+    newName: String
+  }
+
+  input ChangePhpVersionInput {
+    "The site ID"
+    siteId: ID!
+    "Target PHP version"
+    phpVersion: String!
+  }
+
+  type ChangePhpVersionResult {
+    "Whether change was successful"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+    "The new PHP version"
+    phpVersion: String
+  }
+
+  input ImportSiteInput {
+    "Path to the zip file to import"
+    zipPath: String!
+    "Name for the imported site (optional)"
+    siteName: String
+  }
+
+  type ImportSiteResult {
+    "Whether import was successful"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+    "The imported site ID"
+    siteId: ID
+    "The imported site name"
+    siteName: String
+  }
+
+  # Phase 9: Site Configuration & Dev Tools
+  input ToggleXdebugInput {
+    "The site ID"
+    siteId: ID!
+    "Whether to enable or disable Xdebug"
+    enabled: Boolean!
+  }
+
+  type ToggleXdebugResult {
+    "Whether toggle was successful"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+    "Current Xdebug state"
+    enabled: Boolean
+  }
+
+  input GetSiteLogsInput {
+    "The site ID"
+    siteId: ID!
+    "Type of logs to retrieve (php, nginx, mysql, all)"
+    logType: String = "php"
+    "Number of lines to return"
+    lines: Int = 100
+  }
+
+  type LogEntry {
+    "Log type"
+    type: String!
+    "Log content"
+    content: String!
+    "Log file path"
+    path: String!
+  }
+
+  type GetSiteLogsResult {
+    "Whether retrieval was successful"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+    "Log entries"
+    logs: [LogEntry!]
+  }
+
+  type ServiceInfo {
+    "Service role (php, database, webserver)"
+    role: String!
+    "Service name"
+    name: String!
+    "Service version"
+    version: String!
+  }
+
+  type ListServicesResult {
+    "Whether listing was successful"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+    "Available services"
+    services: [ServiceInfo!]
+  }
+
   extend type Mutation {
     "Create a new WordPress site with full WordPress installation"
     createSite(input: CreateSiteInput!): CreateSiteResult!
@@ -203,6 +370,35 @@ const typeDefs = gql`
 
     "Save a site as a blueprint"
     saveBlueprint(input: SaveBlueprintInput!): SaveBlueprintResult!
+
+    # Phase 8: WordPress Development Tools
+    "Export site database to SQL file"
+    exportDatabase(input: ExportDatabaseInput!): ExportDatabaseResult!
+
+    "Import SQL file into site database"
+    importDatabase(input: ImportDatabaseInput!): ImportDatabaseResult!
+
+    "Open Adminer database management UI"
+    openAdminer(input: OpenAdminerInput!): OpenAdminerResult!
+
+    "Trust site SSL certificate"
+    trustSsl(input: TrustSslInput!): TrustSslResult!
+
+    "Rename a site"
+    renameSite(input: RenameSiteInput!): RenameSiteResult!
+
+    "Change site PHP version"
+    changePhpVersion(input: ChangePhpVersionInput!): ChangePhpVersionResult!
+
+    "Import site from zip file"
+    importSite(input: ImportSiteInput!): ImportSiteResult!
+
+    # Phase 9: Site Configuration & Dev Tools
+    "Toggle Xdebug for a site"
+    toggleXdebug(input: ToggleXdebugInput!): ToggleXdebugResult!
+
+    "Get site log files"
+    getSiteLogs(input: GetSiteLogsInput!): GetSiteLogsResult!
   }
 
   extend type Query {
@@ -211,6 +407,9 @@ const typeDefs = gql`
 
     "List all available blueprints"
     blueprints: BlueprintsResult!
+
+    "List available service versions"
+    listServices(type: String): ListServicesResult!
   }
 `;
 
@@ -229,6 +428,11 @@ function createResolvers(services: any) {
     exportSite: exportSiteService,
     blueprints: blueprintsService,
     browserManager,
+    adminer,
+    x509Cert,
+    siteProvisioner,
+    importSite: importSiteService,
+    lightningServices,
   } = services;
 
   // Shared WP-CLI execution logic
@@ -319,6 +523,56 @@ function createResolvers(services: any) {
             success: false,
             error: error.message || 'Unknown error',
             blueprints: [],
+          };
+        }
+      },
+
+      listServices: async (_parent: any, args: { type?: string }) => {
+        const { type = 'all' } = args;
+
+        try {
+          localLogger.info(`[${ADDON_NAME}] Listing services (type: ${type})`);
+
+          if (!lightningServices) {
+            return {
+              success: false,
+              error: 'Lightning services not available',
+              services: [],
+            };
+          }
+
+          const roleMap: Record<string, string> = {
+            php: 'php',
+            database: 'mysql',
+            webserver: 'nginx',
+          };
+
+          const roleFilter = type !== 'all' ? roleMap[type] : undefined;
+          const registeredServices = lightningServices.getRegisteredServices(roleFilter);
+
+          const serviceList: Array<{ role: string; name: string; version: string }> = [];
+
+          for (const [role, versions] of Object.entries(registeredServices)) {
+            for (const [version, info] of Object.entries(versions as Record<string, any>)) {
+              serviceList.push({
+                role,
+                name: info?.name || role,
+                version,
+              });
+            }
+          }
+
+          return {
+            success: true,
+            error: null,
+            services: serviceList,
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] Failed to list services:`, error);
+          return {
+            success: false,
+            error: error.message || 'Unknown error',
+            services: [],
           };
         }
       },
@@ -652,6 +906,473 @@ function createResolvers(services: any) {
           };
         }
       },
+
+      // Phase 8: WordPress Development Tools
+      exportDatabase: async (
+        _parent: any,
+        args: { input: { siteId: string; outputPath?: string } }
+      ) => {
+        const { siteId, outputPath } = args.input;
+        const os = require('os');
+        const pathModule = require('path');
+
+        try {
+          const site = siteData.getSite(siteId);
+          if (!site) {
+            return {
+              success: false,
+              error: `Site not found: ${siteId}`,
+              outputPath: null,
+            };
+          }
+
+          // Default to Downloads folder with site name
+          const defaultPath = pathModule.join(
+            os.homedir(),
+            'Downloads',
+            `${site.name.replace(/[^a-z0-9]/gi, '-')}.sql`
+          );
+          const finalPath = outputPath || defaultPath;
+
+          localLogger.info(`[${ADDON_NAME}] Exporting database for ${site.name} to ${finalPath}`);
+
+          // Use WP-CLI db export
+          await wpCli.run(site, ['db', 'export', finalPath], {
+            skipPlugins: true,
+            skipThemes: true,
+          });
+
+          localLogger.info(`[${ADDON_NAME}] Successfully exported database to: ${finalPath}`);
+
+          return {
+            success: true,
+            error: null,
+            outputPath: finalPath,
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] Failed to export database:`, error);
+          return {
+            success: false,
+            error: error.message || 'Unknown error',
+            outputPath: null,
+          };
+        }
+      },
+
+      importDatabase: async (
+        _parent: any,
+        args: { input: { siteId: string; sqlPath: string } }
+      ) => {
+        const { siteId, sqlPath } = args.input;
+        const fs = require('fs');
+
+        try {
+          const site = siteData.getSite(siteId);
+          if (!site) {
+            return {
+              success: false,
+              error: `Site not found: ${siteId}`,
+            };
+          }
+
+          if (!fs.existsSync(sqlPath)) {
+            return {
+              success: false,
+              error: `SQL file not found: ${sqlPath}`,
+            };
+          }
+
+          localLogger.info(`[${ADDON_NAME}] Importing database for ${site.name} from ${sqlPath}`);
+
+          // Use WP-CLI db import
+          await wpCli.run(site, ['db', 'import', sqlPath], {
+            skipPlugins: true,
+            skipThemes: true,
+          });
+
+          localLogger.info(`[${ADDON_NAME}] Successfully imported database from: ${sqlPath}`);
+
+          return {
+            success: true,
+            error: null,
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] Failed to import database:`, error);
+          return {
+            success: false,
+            error: error.message || 'Unknown error',
+          };
+        }
+      },
+
+      openAdminer: async (_parent: any, args: { input: { siteId: string } }) => {
+        const { siteId } = args.input;
+
+        try {
+          const site = siteData.getSite(siteId);
+          if (!site) {
+            return {
+              success: false,
+              error: `Site not found: ${siteId}`,
+            };
+          }
+
+          localLogger.info(`[${ADDON_NAME}] Opening Adminer for ${site.name}`);
+
+          if (adminer) {
+            await adminer.open(site);
+          } else {
+            return {
+              success: false,
+              error: 'Adminer service not available',
+            };
+          }
+
+          return {
+            success: true,
+            error: null,
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] Failed to open Adminer:`, error);
+          return {
+            success: false,
+            error: error.message || 'Unknown error',
+          };
+        }
+      },
+
+      trustSsl: async (_parent: any, args: { input: { siteId: string } }) => {
+        const { siteId } = args.input;
+
+        try {
+          const site = siteData.getSite(siteId);
+          if (!site) {
+            return {
+              success: false,
+              error: `Site not found: ${siteId}`,
+            };
+          }
+
+          localLogger.info(`[${ADDON_NAME}] Trusting SSL for ${site.name}`);
+
+          if (x509Cert) {
+            await x509Cert.trustCert(site);
+          } else {
+            return {
+              success: false,
+              error: 'X509 certificate service not available',
+            };
+          }
+
+          return {
+            success: true,
+            error: null,
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] Failed to trust SSL:`, error);
+          return {
+            success: false,
+            error: error.message || 'Unknown error',
+          };
+        }
+      },
+
+      renameSite: async (_parent: any, args: { input: { siteId: string; newName: string } }) => {
+        const { siteId, newName } = args.input;
+
+        try {
+          const site = siteData.getSite(siteId);
+          if (!site) {
+            return {
+              success: false,
+              error: `Site not found: ${siteId}`,
+              newName: null,
+            };
+          }
+
+          localLogger.info(`[${ADDON_NAME}] Renaming ${site.name} to ${newName}`);
+
+          // Update site name via siteData
+          site.name = newName;
+          await siteData.updateSite(siteId, { name: newName });
+
+          localLogger.info(`[${ADDON_NAME}] Successfully renamed site to: ${newName}`);
+
+          return {
+            success: true,
+            error: null,
+            newName,
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] Failed to rename site:`, error);
+          return {
+            success: false,
+            error: error.message || 'Unknown error',
+            newName: null,
+          };
+        }
+      },
+
+      changePhpVersion: async (
+        _parent: any,
+        args: { input: { siteId: string; phpVersion: string } }
+      ) => {
+        const { siteId, phpVersion } = args.input;
+
+        try {
+          const site = siteData.getSite(siteId);
+          if (!site) {
+            return {
+              success: false,
+              error: `Site not found: ${siteId}`,
+              phpVersion: null,
+            };
+          }
+
+          localLogger.info(`[${ADDON_NAME}] Changing PHP version for ${site.name} to ${phpVersion}`);
+
+          if (siteProvisioner) {
+            await siteProvisioner.swapService(site, 'php', phpVersion);
+          } else {
+            return {
+              success: false,
+              error: 'Site provisioner service not available',
+              phpVersion: null,
+            };
+          }
+
+          localLogger.info(`[${ADDON_NAME}] Successfully changed PHP version to: ${phpVersion}`);
+
+          return {
+            success: true,
+            error: null,
+            phpVersion,
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] Failed to change PHP version:`, error);
+          return {
+            success: false,
+            error: error.message || 'Unknown error',
+            phpVersion: null,
+          };
+        }
+      },
+
+      importSite: async (
+        _parent: any,
+        args: { input: { zipPath: string; siteName?: string } }
+      ) => {
+        const { zipPath, siteName } = args.input;
+        const fs = require('fs');
+
+        try {
+          if (!fs.existsSync(zipPath)) {
+            return {
+              success: false,
+              error: `Zip file not found: ${zipPath}`,
+              siteId: null,
+              siteName: null,
+            };
+          }
+
+          localLogger.info(`[${ADDON_NAME}] Importing site from ${zipPath}`);
+
+          if (!importSiteService) {
+            return {
+              success: false,
+              error: 'Import site service not available',
+              siteId: null,
+              siteName: null,
+            };
+          }
+
+          const result = await importSiteService.run({
+            zipPath,
+            siteName: siteName || undefined,
+          });
+
+          localLogger.info(`[${ADDON_NAME}] Successfully imported site: ${result.name}`);
+
+          return {
+            success: true,
+            error: null,
+            siteId: result.id,
+            siteName: result.name,
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] Failed to import site:`, error);
+          return {
+            success: false,
+            error: error.message || 'Unknown error',
+            siteId: null,
+            siteName: null,
+          };
+        }
+      },
+
+      // Phase 9: Site Configuration & Dev Tools
+      toggleXdebug: async (
+        _parent: any,
+        args: { input: { siteId: string; enabled: boolean } }
+      ) => {
+        const { siteId, enabled } = args.input;
+
+        try {
+          const site = siteData.getSite(siteId);
+          if (!site) {
+            return {
+              success: false,
+              error: `Site not found: ${siteId}`,
+              enabled: null,
+            };
+          }
+
+          localLogger.info(
+            `[${ADDON_NAME}] ${enabled ? 'Enabling' : 'Disabling'} Xdebug for ${site.name}`
+          );
+
+          // Use siteProcessManager to toggle Xdebug
+          if (enabled) {
+            await siteProcessManager.enableXdebug(site);
+          } else {
+            await siteProcessManager.disableXdebug(site);
+          }
+
+          localLogger.info(
+            `[${ADDON_NAME}] Successfully ${enabled ? 'enabled' : 'disabled'} Xdebug`
+          );
+
+          return {
+            success: true,
+            error: null,
+            enabled,
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] Failed to toggle Xdebug:`, error);
+          return {
+            success: false,
+            error: error.message || 'Unknown error',
+            enabled: null,
+          };
+        }
+      },
+
+      getSiteLogs: async (
+        _parent: any,
+        args: { input: { siteId: string; logType?: string; lines?: number } }
+      ) => {
+        const { siteId, logType = 'php', lines = 100 } = args.input;
+        const fs = require('fs');
+        const pathModule = require('path');
+
+        try {
+          const site = siteData.getSite(siteId);
+          if (!site) {
+            return {
+              success: false,
+              error: `Site not found: ${siteId}`,
+              logs: [],
+            };
+          }
+
+          localLogger.info(`[${ADDON_NAME}] Getting ${logType} logs for ${site.name}`);
+
+          const logs: Array<{ type: string; content: string; path: string }> = [];
+          const logsDir = pathModule.join(site.path, 'logs');
+
+          const logFiles: Record<string, string[]> = {
+            php: ['php', 'php-fpm'],
+            nginx: ['nginx'],
+            mysql: ['mysql'],
+            all: ['php', 'php-fpm', 'nginx', 'mysql'],
+          };
+
+          const targetLogs = logFiles[logType] || logFiles.php;
+
+          for (const logName of targetLogs) {
+            // Check for error and access logs
+            for (const suffix of ['error.log', 'access.log', '.log']) {
+              const logPath = pathModule.join(logsDir, `${logName}${suffix === '.log' ? '' : '/'}${suffix}`);
+              const altLogPath = pathModule.join(logsDir, `${logName}${suffix}`);
+
+              const finalPath = fs.existsSync(logPath) ? logPath : fs.existsSync(altLogPath) ? altLogPath : null;
+
+              if (finalPath && fs.existsSync(finalPath)) {
+                try {
+                  const content = fs.readFileSync(finalPath, 'utf-8');
+                  const logLines = content.split('\n');
+                  const lastLines = logLines.slice(-lines).join('\n');
+
+                  logs.push({
+                    type: logName,
+                    content: lastLines || '(empty)',
+                    path: finalPath,
+                  });
+                } catch {
+                  // Skip unreadable logs
+                }
+              }
+            }
+          }
+
+          if (logs.length === 0) {
+            // Try to find any log files
+            if (fs.existsSync(logsDir)) {
+              const entries = fs.readdirSync(logsDir, { withFileTypes: true });
+              for (const entry of entries) {
+                if (entry.isDirectory()) {
+                  const subDir = pathModule.join(logsDir, entry.name);
+                  const subEntries = fs.readdirSync(subDir);
+                  for (const subFile of subEntries) {
+                    if (subFile.endsWith('.log')) {
+                      const logPath = pathModule.join(subDir, subFile);
+                      try {
+                        const content = fs.readFileSync(logPath, 'utf-8');
+                        const logLines = content.split('\n');
+                        const lastLines = logLines.slice(-lines).join('\n');
+                        logs.push({
+                          type: entry.name,
+                          content: lastLines || '(empty)',
+                          path: logPath,
+                        });
+                      } catch {
+                        // Skip unreadable logs
+                      }
+                    }
+                  }
+                } else if (entry.name.endsWith('.log')) {
+                  const logPath = pathModule.join(logsDir, entry.name);
+                  try {
+                    const content = fs.readFileSync(logPath, 'utf-8');
+                    const logLines = content.split('\n');
+                    const lastLines = logLines.slice(-lines).join('\n');
+                    logs.push({
+                      type: entry.name.replace('.log', ''),
+                      content: lastLines || '(empty)',
+                      path: logPath,
+                    });
+                  } catch {
+                    // Skip unreadable logs
+                  }
+                }
+              }
+            }
+          }
+
+          return {
+            success: true,
+            error: null,
+            logs,
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] Failed to get logs:`, error);
+          return {
+            success: false,
+            error: error.message || 'Unknown error',
+            logs: [],
+          };
+        }
+      },
     },
   };
 }
@@ -775,7 +1496,7 @@ export default function (_context: LocalMain.AddonMainContext): void {
     const resolvers = createResolvers(services);
     graphql.registerGraphQLService('mcp-server', typeDefs, resolvers);
     localLogger.info(
-      `[${ADDON_NAME}] Registered GraphQL: createSite, deleteSite, wpCli, openSite, cloneSite, exportSite, blueprints, saveBlueprint`
+      `[${ADDON_NAME}] Registered GraphQL: 24 tools (Phase 1-9)`
     );
 
     // Start MCP server (for AI tools)
@@ -786,6 +1507,11 @@ export default function (_context: LocalMain.AddonMainContext): void {
       deleteSite: services.deleteSite,
       addSite: services.addSite,
       localLogger: services.localLogger,
+      adminer: services.adminer,
+      x509Cert: services.x509Cert,
+      siteProvisioner: services.siteProvisioner,
+      importSite: services.importSite,
+      lightningServices: services.lightningServices,
     };
 
     startMcpServer(localServices, localLogger);
