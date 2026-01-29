@@ -749,6 +749,16 @@ function createResolvers(services: any) {
             };
           }
 
+          // Check if site is running
+          const status = await siteProcessManager.getSiteStatus(site);
+          if (status !== 'running') {
+            return {
+              success: false,
+              error: `Site "${site.name}" must be running to open in browser. Start it first.`,
+              url: null,
+            };
+          }
+
           const protocol = site.isStarred ? 'https' : 'http';
           const url = `${protocol}://${site.domain}${path}`;
 
@@ -786,6 +796,18 @@ function createResolvers(services: any) {
             return {
               success: false,
               error: `Site not found: ${siteId}`,
+              newSiteId: null,
+              newSiteName: null,
+              newSiteDomain: null,
+            };
+          }
+
+          // Check if site is running - needed for database cloning
+          const status = await siteProcessManager.getSiteStatus(site);
+          if (status !== 'running') {
+            return {
+              success: false,
+              error: `Site "${site.name}" must be running to clone. Start it first.`,
               newSiteId: null,
               newSiteName: null,
               newSiteDomain: null,
@@ -840,6 +862,16 @@ function createResolvers(services: any) {
             };
           }
 
+          // Check if site is running - needed for database export
+          const status = await siteProcessManager.getSiteStatus(site);
+          if (status !== 'running') {
+            return {
+              success: false,
+              error: `Site "${site.name}" must be running to export. Start it first.`,
+              exportPath: null,
+            };
+          }
+
           // Default to Downloads folder
           const outputDir = outputPath || path.join(os.homedir(), 'Downloads');
           const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -880,6 +912,16 @@ function createResolvers(services: any) {
             return {
               success: false,
               error: `Site not found: ${siteId}`,
+              blueprintName: null,
+            };
+          }
+
+          // Check if site is running - needed for database export
+          const status = await siteProcessManager.getSiteStatus(site);
+          if (status !== 'running') {
+            return {
+              success: false,
+              error: `Site "${site.name}" must be running to save as blueprint. Start it first.`,
               blueprintName: null,
             };
           }
