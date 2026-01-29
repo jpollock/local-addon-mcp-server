@@ -715,7 +715,7 @@ const tools = [
   },
   {
     name: 'pull_from_wpe',
-    description: 'Pull files and/or database from WP Engine to local site. Progress is shown in Local UI.',
+    description: 'Pull files and/or database from WP Engine to local site. Requires confirm=true to prevent accidental overwrites. Progress is shown in Local UI.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -727,8 +727,12 @@ const tools = [
           type: 'boolean',
           description: 'Include database in pull (default: false)',
         },
+        confirm: {
+          type: 'boolean',
+          description: 'Must be true to confirm pull operation (required for safety)',
+        },
       },
-      required: ['site'],
+      required: ['site', 'confirm'],
     },
   },
   {
@@ -800,6 +804,46 @@ async function findSite(siteIdentifier) {
 
   return null;
 }
+
+// Security: Validate snapshot ID format (restic uses hex hashes)
+function isValidSnapshotId(snapshotId) {
+  if (!snapshotId || typeof snapshotId !== 'string') return false;
+  // Restic snapshot IDs are hex strings, 8-64 characters (short prefix or full hash)
+  return /^[a-f0-9]{8,64}$/i.test(snapshotId);
+}
+
+// Security: Validate SQL file path
+function isValidSqlPath(sqlPath) {
+  if (!sqlPath || typeof sqlPath !== 'string') return false;
+  const path = require('path');
+  const fs = require('fs');
+  const resolvedPath = path.resolve(sqlPath);
+  // Check path doesn't contain traversal and ends with .sql
+  return resolvedPath.endsWith('.sql') && !sqlPath.includes('..') && fs.existsSync(resolvedPath);
+}
+
+// Performance: Timeout wrapper for long-running operations
+async function withTimeout(promise, timeoutMs, operationName) {
+  let timeoutId;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`${operationName} timed out after ${timeoutMs / 1000} seconds`));
+    }, timeoutMs);
+  });
+
+  try {
+    const result = await Promise.race([promise, timeoutPromise]);
+    clearTimeout(timeoutId);
+    return result;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    throw error;
+  }
+}
+
+// Timeout constants (in milliseconds)
+const TIMEOUT_SYNC_OPERATION = 300000; // 5 minutes for push/pull
+const TIMEOUT_BACKUP_OPERATION = 600000; // 10 minutes for backup operations
 
 // Tool handlers
 async function handleTool(name, args) {
@@ -936,6 +980,27 @@ async function handleTool(name, args) {
     }
 
     case 'wp_cli': {
+      // Security: Block dangerous WP-CLI commands that could execute arbitrary code
+      const BLOCKED_WP_COMMANDS = [
+        'eval',
+        'eval-file',
+        'shell',
+        'db query',
+        'db cli',
+      ];
+
+      const commandStr = (args.command || []).join(' ').toLowerCase();
+      for (const blocked of BLOCKED_WP_COMMANDS) {
+        if (commandStr.includes(blocked)) {
+          return {
+            content: [{ type: 'text', text: JSON.stringify({
+              error: `Command '${blocked}' is blocked for security reasons. Use Local's terminal for shell access.`,
+            }) }],
+            isError: true,
+          };
+        }
+      }
+
       const site = await findSite(args.site);
       if (!site) {
         return {
@@ -1353,6 +1418,14 @@ async function handleTool(name, args) {
       if (!args.sql_path) {
         return {
           content: [{ type: 'text', text: 'Error: sql_path is required' }],
+          isError: true,
+        };
+      }
+
+      // Security: Validate SQL path to prevent path traversal attacks
+      if (!isValidSqlPath(args.sql_path)) {
+        return {
+          content: [{ type: 'text', text: 'Error: Invalid SQL path. Path must end with .sql, exist on disk, and not contain path traversal sequences (..).' }],
           isError: true,
         };
       }
@@ -1825,21 +1898,25 @@ async function handleTool(name, args) {
         };
       }
 
-      const data = await graphqlRequest(`
-        mutation CreateBackup($siteId: ID!, $provider: String!, $note: String) {
-          createBackup(siteId: $siteId, provider: $provider, note: $note) {
-            success
-            snapshotId
-            timestamp
-            message
-            error
+      const data = await withTimeout(
+        graphqlRequest(`
+          mutation CreateBackup($siteId: ID!, $provider: String!, $note: String) {
+            createBackup(siteId: $siteId, provider: $provider, note: $note) {
+              success
+              snapshotId
+              timestamp
+              message
+              error
+            }
           }
-        }
-      `, {
-        siteId: site.id,
-        provider: args.provider,
-        note: args.note,
-      });
+        `, {
+          siteId: site.id,
+          provider: args.provider,
+          note: args.note,
+        }),
+        TIMEOUT_BACKUP_OPERATION,
+        'Create backup'
+      );
 
       const result = data.createBackup;
       if (!result.success) {
@@ -1863,6 +1940,16 @@ async function handleTool(name, args) {
     }
 
     case 'restore_backup': {
+      // Security: Validate snapshot ID format
+      if (!isValidSnapshotId(args.snapshot_id)) {
+        return {
+          content: [{ type: 'text', text: JSON.stringify({
+            error: 'Invalid snapshot ID format. Use list_backups to get valid snapshot IDs.',
+          }) }],
+          isError: true,
+        };
+      }
+
       const site = await findSite(args.site);
       if (!site) {
         return {
@@ -1871,20 +1958,24 @@ async function handleTool(name, args) {
         };
       }
 
-      const data = await graphqlRequest(`
-        mutation RestoreBackup($siteId: ID!, $provider: String!, $snapshotId: String!, $confirm: Boolean) {
-          restoreBackup(siteId: $siteId, provider: $provider, snapshotId: $snapshotId, confirm: $confirm) {
-            success
-            message
-            error
+      const data = await withTimeout(
+        graphqlRequest(`
+          mutation RestoreBackup($siteId: ID!, $provider: String!, $snapshotId: String!, $confirm: Boolean) {
+            restoreBackup(siteId: $siteId, provider: $provider, snapshotId: $snapshotId, confirm: $confirm) {
+              success
+              message
+              error
+            }
           }
-        }
-      `, {
-        siteId: site.id,
-        provider: args.provider,
-        snapshotId: args.snapshot_id,
-        confirm: args.confirm === true,
-      });
+        `, {
+          siteId: site.id,
+          provider: args.provider,
+          snapshotId: args.snapshot_id,
+          confirm: args.confirm === true,
+        }),
+        TIMEOUT_BACKUP_OPERATION,
+        'Restore backup'
+      );
 
       const result = data.restoreBackup;
       if (!result.success) {
@@ -1906,6 +1997,16 @@ async function handleTool(name, args) {
     }
 
     case 'delete_backup': {
+      // Security: Validate snapshot ID format
+      if (!isValidSnapshotId(args.snapshot_id)) {
+        return {
+          content: [{ type: 'text', text: JSON.stringify({
+            error: 'Invalid snapshot ID format. Use list_backups to get valid snapshot IDs.',
+          }) }],
+          isError: true,
+        };
+      }
+
       const site = await findSite(args.site);
       if (!site) {
         return {
@@ -1955,6 +2056,14 @@ async function handleTool(name, args) {
       if (!site) {
         return {
           content: [{ type: 'text', text: `Site not found: ${args.site}` }],
+          isError: true,
+        };
+      }
+
+      // Security: Validate snapshot ID format
+      if (!isValidSnapshotId(args.snapshot_id)) {
+        return {
+          content: [{ type: 'text', text: 'Error: Invalid snapshot ID format. Expected hex string (8-64 characters).' }],
           isError: true,
         };
       }
@@ -2273,20 +2382,24 @@ async function handleTool(name, args) {
         };
       }
 
-      const data = await graphqlRequest(`
-        mutation($localSiteId: ID!, $remoteInstallId: ID!, $includeSql: Boolean, $confirm: Boolean) {
-          pushToWpe(localSiteId: $localSiteId, remoteInstallId: $remoteInstallId, includeSql: $includeSql, confirm: $confirm) {
-            success
-            message
-            error
+      const data = await withTimeout(
+        graphqlRequest(`
+          mutation($localSiteId: ID!, $remoteInstallId: ID!, $includeSql: Boolean, $confirm: Boolean) {
+            pushToWpe(localSiteId: $localSiteId, remoteInstallId: $remoteInstallId, includeSql: $includeSql, confirm: $confirm) {
+              success
+              message
+              error
+            }
           }
-        }
-      `, {
-        localSiteId: site.id,
-        remoteInstallId: site.id, // Will be resolved by the mutation using hostConnections
-        includeSql: args.include_database || false,
-        confirm: args.confirm || false,
-      });
+        `, {
+          localSiteId: site.id,
+          remoteInstallId: site.id, // Will be resolved by the mutation using hostConnections
+          includeSql: args.include_database || false,
+          confirm: args.confirm || false,
+        }),
+        TIMEOUT_SYNC_OPERATION,
+        'Push to WP Engine'
+      );
 
       const result = data.pushToWpe;
       if (!result.success) {
@@ -2308,6 +2421,16 @@ async function handleTool(name, args) {
     }
 
     case 'pull_from_wpe': {
+      // Require confirmation for destructive operation
+      if (!args.confirm) {
+        return {
+          content: [{ type: 'text', text: JSON.stringify({
+            error: 'Pull requires confirm=true to prevent accidental overwrites. This operation will overwrite local files' + (args.include_database ? ' and database' : '') + '.',
+          }) }],
+          isError: true,
+        };
+      }
+
       const site = await findSite(args.site);
       if (!site) {
         return {
@@ -2316,19 +2439,24 @@ async function handleTool(name, args) {
         };
       }
 
-      const data = await graphqlRequest(`
-        mutation($localSiteId: ID!, $remoteInstallId: ID!, $includeSql: Boolean) {
-          pullFromWpe(localSiteId: $localSiteId, remoteInstallId: $remoteInstallId, includeSql: $includeSql) {
-            success
-            message
-            error
+      const data = await withTimeout(
+        graphqlRequest(`
+          mutation($localSiteId: ID!, $remoteInstallId: ID!, $includeSql: Boolean, $confirm: Boolean) {
+            pullFromWpe(localSiteId: $localSiteId, remoteInstallId: $remoteInstallId, includeSql: $includeSql, confirm: $confirm) {
+              success
+              message
+              error
+            }
           }
-        }
-      `, {
-        localSiteId: site.id,
-        remoteInstallId: site.id, // Will be resolved by the mutation using hostConnections
-        includeSql: args.include_database || false,
-      });
+        `, {
+          localSiteId: site.id,
+          remoteInstallId: site.id, // Will be resolved by the mutation using hostConnections
+          includeSql: args.include_database || false,
+          confirm: args.confirm || false,
+        }),
+        TIMEOUT_SYNC_OPERATION,
+        'Pull from WP Engine'
+      );
 
       const result = data.pullFromWpe;
       if (!result.success) {

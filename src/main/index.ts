@@ -2656,7 +2656,29 @@ function createResolvers(services: any) {
       ) => {
         const { siteId, logType = 'php', lines = 100 } = args.input;
         const fs = require('fs');
+        const fsPromises = fs.promises;
         const pathModule = require('path');
+
+        // Helper for async file existence check
+        const fileExists = async (filePath: string): Promise<boolean> => {
+          try {
+            await fsPromises.access(filePath);
+            return true;
+          } catch {
+            return false;
+          }
+        };
+
+        // Helper to read last N lines of a file
+        const readLastLines = async (filePath: string, numLines: number): Promise<string> => {
+          try {
+            const content = await fsPromises.readFile(filePath, 'utf-8');
+            const logLines = content.split('\n');
+            return logLines.slice(-numLines).join('\n') || '(empty)';
+          } catch {
+            return '';
+          }
+        };
 
         try {
           const site = siteData.getSite(siteId);
@@ -2691,25 +2713,21 @@ function createResolvers(services: any) {
               );
               const altLogPath = pathModule.join(logsDir, `${logName}${suffix}`);
 
-              const finalPath = fs.existsSync(logPath)
-                ? logPath
-                : fs.existsSync(altLogPath)
-                  ? altLogPath
-                  : null;
+              let finalPath: string | null = null;
+              if (await fileExists(logPath)) {
+                finalPath = logPath;
+              } else if (await fileExists(altLogPath)) {
+                finalPath = altLogPath;
+              }
 
-              if (finalPath && fs.existsSync(finalPath)) {
-                try {
-                  const content = fs.readFileSync(finalPath, 'utf-8');
-                  const logLines = content.split('\n');
-                  const lastLines = logLines.slice(-lines).join('\n');
-
+              if (finalPath) {
+                const content = await readLastLines(finalPath, lines);
+                if (content) {
                   logs.push({
                     type: logName,
-                    content: lastLines || '(empty)',
+                    content,
                     path: finalPath,
                   });
-                } catch {
-                  // Skip unreadable logs
                 }
               }
             }
@@ -2717,42 +2735,34 @@ function createResolvers(services: any) {
 
           if (logs.length === 0) {
             // Try to find any log files
-            if (fs.existsSync(logsDir)) {
-              const entries = fs.readdirSync(logsDir, { withFileTypes: true });
+            if (await fileExists(logsDir)) {
+              const entries = await fsPromises.readdir(logsDir, { withFileTypes: true });
               for (const entry of entries) {
                 if (entry.isDirectory()) {
                   const subDir = pathModule.join(logsDir, entry.name);
-                  const subEntries = fs.readdirSync(subDir);
+                  const subEntries = await fsPromises.readdir(subDir);
                   for (const subFile of subEntries) {
                     if (subFile.endsWith('.log')) {
                       const logPath = pathModule.join(subDir, subFile);
-                      try {
-                        const content = fs.readFileSync(logPath, 'utf-8');
-                        const logLines = content.split('\n');
-                        const lastLines = logLines.slice(-lines).join('\n');
+                      const content = await readLastLines(logPath, lines);
+                      if (content) {
                         logs.push({
                           type: entry.name,
-                          content: lastLines || '(empty)',
+                          content,
                           path: logPath,
                         });
-                      } catch {
-                        // Skip unreadable logs
                       }
                     }
                   }
                 } else if (entry.name.endsWith('.log')) {
                   const logPath = pathModule.join(logsDir, entry.name);
-                  try {
-                    const content = fs.readFileSync(logPath, 'utf-8');
-                    const logLines = content.split('\n');
-                    const lastLines = logLines.slice(-lines).join('\n');
+                  const content = await readLastLines(logPath, lines);
+                  if (content) {
                     logs.push({
                       type: entry.name.replace('.log', ''),
-                      content: lastLines || '(empty)',
+                      content,
                       path: logPath,
                     });
-                  } catch {
-                    // Skip unreadable logs
                   }
                 }
               }
