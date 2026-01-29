@@ -3,7 +3,7 @@
 **Status:** Approved
 **Author:** Jeremy Pollock
 **Created:** 2026-01-28
-**Last Updated:** 2026-01-28
+**Last Updated:** 2026-01-29
 
 ## Summary
 
@@ -173,7 +173,7 @@ Connection info stored at platform-specific location:
   "authToken": "base64-encoded-token",
   "port": 10789,
   "version": "1.0.0",
-  "tools": ["list_sites", "start_site", "stop_site", "restart_site", "wp_cli", "get_site", "create_site", "delete_site", "get_local_info"]
+  "tools": ["list_sites", "start_site", "stop_site", "restart_site", "wp_cli", "get_site", "create_site", "delete_site", "get_local_info", "wpe_status", "wpe_authenticate", "list_wpe_sites", "..."]
 }
 ```
 
@@ -409,12 +409,20 @@ Based on analysis of Local's full feature set, the following phases are proposed
 | FR-10.2 | `list_backups` - List available backups | Medium | Needs work |
 | FR-10.3 | `restore_backup` - Restore from backup | Medium | Needs work |
 
-### Phase 11: Connect/Sync (Conditional)
-| ID | Requirement | Priority | GraphQL Status |
-|----|-------------|----------|----------------|
-| FR-11.1 | `list_remote_sites` - List WPE/Flywheel sites | Low | Needs work |
-| FR-11.2 | `push_site` - Push to hosting provider | Low | Needs work |
-| FR-11.3 | `pull_site` - Pull from hosting provider | Low | Needs work |
+### Phase 11: WP Engine Connect/Sync ✅ Complete
+| ID | Requirement | Status |
+|----|-------------|--------|
+| FR-11.1 | `wpe_status` - Check WP Engine authentication status | ✅ Done |
+| FR-11.2 | `wpe_authenticate` - Trigger OAuth flow with WP Engine | ✅ Done |
+| FR-11.3 | `wpe_logout` - Clear WP Engine authentication | ✅ Done |
+| FR-11.4 | `list_wpe_sites` - List all sites from WP Engine account | ✅ Done |
+| FR-11.5 | `get_wpe_link` - Get detailed WPE connection info for a local site | ✅ Done |
+| FR-11.6 | `push_to_wpe` - Push local changes to WP Engine | ✅ Done |
+| FR-11.7 | `pull_from_wpe` - Pull changes from WP Engine to local | ✅ Done |
+| FR-11.8 | `get_sync_history` - Get recent sync operations for a site | ✅ Done |
+| FR-11.9 | `get_site_changes` - Preview file changes between local and WPE | ✅ Done |
+
+**Note:** See [PHASE-11-WPE-CONNECT.md](./PHASE-11-WPE-CONNECT.md) for detailed documentation.
 
 ### Not Recommended for MCP
 The following features are explicitly excluded due to security or complexity concerns:

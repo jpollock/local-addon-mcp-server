@@ -310,6 +310,121 @@ List available service versions (PHP, MySQL, Nginx).
 What PHP versions are available?
 ```
 
+## WP Engine Connect Tools
+
+These tools enable integration with WP Engine hosting, allowing you to push and pull changes between your local sites and WP Engine environments.
+
+### wpe_status
+Check WP Engine authentication status.
+
+**Parameters:** None
+
+**Example:**
+```
+Am I logged into WP Engine?
+```
+
+### wpe_authenticate
+Trigger OAuth authentication flow with WP Engine. Opens a browser for consent.
+
+**Parameters:** None
+
+**Example:**
+```
+Log me into WP Engine
+```
+
+### wpe_logout
+Clear WP Engine authentication tokens.
+
+**Parameters:** None
+
+**Example:**
+```
+Log out of WP Engine
+```
+
+### list_wpe_sites
+List all sites from your WP Engine account.
+
+**Parameters:**
+- `accountId` (optional): Filter by specific account
+
+**Example:**
+```
+List my WP Engine sites
+```
+
+### get_wpe_link
+Get detailed WP Engine connection information for a local site.
+
+**Parameters:**
+- `site` (required): Site name or ID
+
+**Example:**
+```
+Is my-blog connected to WP Engine?
+```
+
+**Returns:**
+- Connection status
+- Install name and environment
+- Portal URL
+- Available capabilities (push, pull, sync modes)
+
+### push_to_wpe
+Push local changes to WP Engine. Requires confirmation to prevent accidents.
+
+**Parameters:**
+- `site` (required): Site name or ID
+- `includeSql` (optional): Include database (default: false)
+- `confirm` (required): Must be `true` to proceed
+
+**Example:**
+```
+Push my-blog to WP Engine (confirm: true)
+```
+
+### pull_from_wpe
+Pull changes from WP Engine to local.
+
+**Parameters:**
+- `site` (required): Site name or ID
+- `includeSql` (optional): Include database (default: false)
+
+**Example:**
+```
+Pull the latest changes from WP Engine for my-blog
+```
+
+### get_sync_history
+Get recent push/pull operations for a site.
+
+**Parameters:**
+- `site` (required): Site name or ID
+- `limit` (optional): Number of records to return (default: 10)
+
+**Example:**
+```
+Show sync history for my-blog
+```
+
+### get_site_changes
+Preview what files have changed between local and WP Engine. This is a safe, read-only operation using Magic Sync's dry-run comparison.
+
+**Parameters:**
+- `site` (required): Site name or ID
+- `direction` (optional): "push" (local changes) or "pull" (remote changes)
+
+**Example:**
+```
+What has changed in my-blog since my last sync?
+```
+
+**Returns:**
+- Summary of changes
+- Lists of added, modified, and deleted files
+
 ## Troubleshooting
 
 ### Connection Refused
