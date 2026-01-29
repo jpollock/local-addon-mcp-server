@@ -162,7 +162,7 @@ const tools = [
   },
   {
     name: 'wp_cli',
-    description: 'Run a WP-CLI command against a WordPress site. The site must be running.',
+    description: 'Run a WP-CLI command against a WordPress site. Site will be auto-started if not running.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -229,7 +229,7 @@ const tools = [
   },
   {
     name: 'open_site',
-    description: 'Open a WordPress site in the default browser',
+    description: 'Open a WordPress site in the default browser. Site will be auto-started if not running.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -265,7 +265,7 @@ const tools = [
   },
   {
     name: 'export_site',
-    description: 'Export a WordPress site to a zip file',
+    description: 'Export a WordPress site to a zip file. Site will be auto-started if not running.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -291,7 +291,7 @@ const tools = [
   },
   {
     name: 'save_blueprint',
-    description: 'Save a site as a blueprint (template) for creating new sites',
+    description: 'Save a site as a blueprint (template) for creating new sites. Site will be auto-started if not running.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -310,7 +310,7 @@ const tools = [
   // Phase 8: WordPress Development Tools
   {
     name: 'export_database',
-    description: 'Export a site database to a SQL file',
+    description: 'Export a site database to a SQL file. Site will be auto-started if not running.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -328,7 +328,7 @@ const tools = [
   },
   {
     name: 'import_database',
-    description: 'Import a SQL file into a site database',
+    description: 'Import a SQL file into a site database. Site will be auto-started if not running.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -346,7 +346,7 @@ const tools = [
   },
   {
     name: 'open_adminer',
-    description: 'Open Adminer database management UI for a site',
+    description: 'Open Adminer database management UI for a site. Site will be auto-started if not running.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -512,7 +512,7 @@ const tools = [
   },
   {
     name: 'create_backup',
-    description: 'Create a backup of a site to cloud storage (Dropbox or Google Drive)',
+    description: 'Create a backup of a site to cloud storage (Dropbox or Google Drive). Site will be auto-started if not running.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -535,7 +535,7 @@ const tools = [
   },
   {
     name: 'restore_backup',
-    description: 'Restore a site from a cloud backup. WARNING: This will overwrite current site files and database.',
+    description: 'Restore a site from a cloud backup. Site will be auto-started if not running. WARNING: This will overwrite current site files and database.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -693,7 +693,7 @@ const tools = [
   // Phase 11c: Sync Operations
   {
     name: 'push_to_wpe',
-    description: 'Push local site files and/or database to WP Engine. Requires confirm=true to prevent accidental overwrites. Progress is shown in Local UI.',
+    description: 'Push local site files and/or database to WP Engine. Site will be auto-started if not running. Requires confirm=true to prevent accidental overwrites.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -715,7 +715,7 @@ const tools = [
   },
   {
     name: 'pull_from_wpe',
-    description: 'Pull files and/or database from WP Engine to local site. Requires confirm=true to prevent accidental overwrites. Progress is shown in Local UI.',
+    description: 'Pull files and/or database from WP Engine to local site. Site will be auto-started if not running. Requires confirm=true to prevent accidental overwrites.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -755,7 +755,7 @@ const tools = [
   },
   {
     name: 'get_site_changes',
-    description: 'Preview what files have changed between local site and WP Engine. Uses Magic Sync dry-run comparison to show added, modified, and deleted files without making any changes.',
+    description: 'Preview what files have changed between local site and WP Engine. Site will be auto-started if not running. Uses Magic Sync dry-run comparison.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -844,6 +844,45 @@ async function withTimeout(promise, timeoutMs, operationName) {
 // Timeout constants (in milliseconds)
 const TIMEOUT_SYNC_OPERATION = 300000; // 5 minutes for push/pull
 const TIMEOUT_BACKUP_OPERATION = 600000; // 10 minutes for backup operations
+
+// Helper: Sleep for specified milliseconds
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Auto-start site if not running (used by tools that require a running site)
+async function ensureSiteRunning(site) {
+  // Check current status
+  const data = await graphqlRequest(`
+    query($id: ID!) {
+      site(id: $id) {
+        id
+        status
+      }
+    }
+  `, { id: site.id });
+
+  const currentStatus = data.site?.status;
+
+  if (currentStatus === 'running') {
+    return { wasStarted: false };
+  }
+
+  // Start the site
+  await graphqlRequest(`
+    mutation($id: ID!) {
+      startSite(id: $id) {
+        id
+        status
+      }
+    }
+  `, { id: site.id });
+
+  // Brief wait for services to be ready
+  await sleep(2000);
+
+  return { wasStarted: true };
+}
 
 // Tool handlers
 async function handleTool(name, args) {
@@ -1009,6 +1048,9 @@ async function handleTool(name, args) {
         };
       }
 
+      // Auto-start site if not running
+      const { wasStarted } = await ensureSiteRunning(site);
+
       const data = await graphqlRequest(`
         mutation($input: WpCliInput!) {
           wpCli(input: $input) {
@@ -1161,6 +1203,9 @@ async function handleTool(name, args) {
         };
       }
 
+      // Auto-start site if not running
+      await ensureSiteRunning(site);
+
       const sitePath = args.path || '/';
       const data = await graphqlRequest(`
         mutation($input: OpenSiteInput!) {
@@ -1248,6 +1293,9 @@ async function handleTool(name, args) {
         };
       }
 
+      // Auto-start site if not running
+      await ensureSiteRunning(site);
+
       const data = await graphqlRequest(`
         mutation($input: ExportSiteInput!) {
           exportSite(input: $input) {
@@ -1334,6 +1382,9 @@ async function handleTool(name, args) {
         };
       }
 
+      // Auto-start site if not running
+      await ensureSiteRunning(site);
+
       const data = await graphqlRequest(`
         mutation($input: SaveBlueprintInput!) {
           saveBlueprint(input: $input) {
@@ -1374,6 +1425,9 @@ async function handleTool(name, args) {
           isError: true,
         };
       }
+
+      // Auto-start site if not running
+      await ensureSiteRunning(site);
 
       const data = await graphqlRequest(`
         mutation($input: ExportDatabaseInput!) {
@@ -1430,6 +1484,9 @@ async function handleTool(name, args) {
         };
       }
 
+      // Auto-start site if not running
+      await ensureSiteRunning(site);
+
       const data = await graphqlRequest(`
         mutation($input: ImportDatabaseInput!) {
           importDatabase(input: $input) {
@@ -1468,6 +1525,9 @@ async function handleTool(name, args) {
           isError: true,
         };
       }
+
+      // Auto-start site if not running
+      await ensureSiteRunning(site);
 
       const data = await graphqlRequest(`
         mutation($input: OpenAdminerInput!) {
@@ -1898,6 +1958,9 @@ async function handleTool(name, args) {
         };
       }
 
+      // Auto-start site if not running
+      await ensureSiteRunning(site);
+
       const data = await withTimeout(
         graphqlRequest(`
           mutation CreateBackup($siteId: ID!, $provider: String!, $note: String) {
@@ -1957,6 +2020,9 @@ async function handleTool(name, args) {
           isError: true,
         };
       }
+
+      // Auto-start site if not running
+      await ensureSiteRunning(site);
 
       const data = await withTimeout(
         graphqlRequest(`
@@ -2382,6 +2448,9 @@ async function handleTool(name, args) {
         };
       }
 
+      // Auto-start site if not running
+      await ensureSiteRunning(site);
+
       const data = await withTimeout(
         graphqlRequest(`
           mutation($localSiteId: ID!, $remoteInstallId: ID!, $includeSql: Boolean, $confirm: Boolean) {
@@ -2438,6 +2507,9 @@ async function handleTool(name, args) {
           isError: true,
         };
       }
+
+      // Auto-start site if not running
+      await ensureSiteRunning(site);
 
       const data = await withTimeout(
         graphqlRequest(`
@@ -2541,6 +2613,9 @@ async function handleTool(name, args) {
           isError: true,
         };
       }
+
+      // Auto-start site if not running
+      await ensureSiteRunning(site);
 
       const data = await graphqlRequest(`
         query($siteId: ID!, $direction: String) {

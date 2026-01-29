@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Phase 12: Auto-Start Sites**
+  - 12 tools now auto-start sites if not running (eliminates extra round-trips)
+  - Affected tools: `wp_cli`, `open_site`, `open_adminer`, `export_database`, `import_database`, `export_site`, `save_blueprint`, `create_backup`, `restore_backup`, `push_to_wpe`, `pull_from_wpe`, `get_site_changes`
+  - Added `ensureSiteRunning()` helper function
+
 ## [0.0.4] - 2026-01-29
 
 ### Added
