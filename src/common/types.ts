@@ -216,4 +216,62 @@ export interface LocalServices {
       instruction: string;
     }>>;
   };
+  // Phase 10: Cloud Backup services
+  backup?: {
+    createBackup(args: {
+      site: any;
+      provider: 'dropbox' | 'googleDrive';
+      accountId: string;
+      note?: string;
+    }): Promise<{ snapshotId: string; timestamp: string }>;
+    listBackups(args: {
+      site: any;
+      provider: 'dropbox' | 'googleDrive';
+      accountId: string;
+    }): Promise<Array<{
+      snapshotId: string;
+      timestamp: string;
+      note?: string;
+      siteDomain: string;
+      services: Record<string, string>;
+    }>>;
+    restoreBackup(args: {
+      site: any;
+      provider: 'dropbox' | 'googleDrive';
+      accountId: string;
+      snapshotId: string;
+    }): Promise<void>;
+    deleteBackup(args: {
+      site: any;
+      provider: 'dropbox' | 'googleDrive';
+      accountId: string;
+      snapshotId: string;
+    }): Promise<void>;
+    downloadZip(args: {
+      site: any;
+      provider: 'dropbox' | 'googleDrive';
+      accountId: string;
+      snapshotId: string;
+    }): Promise<string>; // Returns file path
+    editBackupDescription(args: {
+      site: any;
+      provider: 'dropbox' | 'googleDrive';
+      accountId: string;
+      snapshotId: string;
+      newDescription: string;
+    }): Promise<void>;
+  };
+  dropbox?: {
+    isAuthenticated(accountId?: string): Promise<boolean>;
+    getAccount(accountId: string): Promise<{ id: string; email: string } | undefined>;
+    getAccounts(): Promise<Array<{ id: string; email: string }>>;
+  };
+  googleDrive?: {
+    isAuthenticated(accountId?: string): Promise<boolean>;
+    getAccount(accountId: string): Promise<{ id: string; email: string } | undefined>;
+    getAccounts(): Promise<Array<{ id: string; email: string }>>;
+  };
+  featureFlags?: {
+    isFeatureEnabled(flag: string): boolean;
+  };
 }

@@ -310,6 +310,107 @@ List available service versions (PHP, MySQL, Nginx).
 What PHP versions are available?
 ```
 
+## Cloud Backup Tools
+
+These tools enable integration with cloud storage providers (Dropbox and Google Drive) for backing up and restoring your local sites. Requires the Cloud Backups feature to be enabled in Local.
+
+### backup_status
+Check if cloud backups are available and which providers are authenticated.
+
+**Parameters:** None
+
+**Example:**
+```
+Are cloud backups available?
+```
+
+**Returns:**
+- Feature enabled status
+- Dropbox authentication status
+- Google Drive authentication status
+
+### list_backups
+List all backups for a site from a cloud provider.
+
+**Parameters:**
+- `site` (required): Site name or ID
+- `provider` (required): "dropbox" or "googleDrive"
+
+**Example:**
+```
+List my backups for my-blog from Dropbox
+```
+
+### create_backup
+Create a new backup of a site to cloud storage.
+
+**Parameters:**
+- `site` (required): Site name or ID
+- `provider` (required): "dropbox" or "googleDrive"
+- `note` (optional): Description for the backup
+
+**Example:**
+```
+Create a backup of my-blog to Dropbox with note "Before plugin update"
+```
+
+### restore_backup
+Restore a site from a cloud backup. Requires confirmation to prevent accidents.
+
+**Parameters:**
+- `site` (required): Site name or ID
+- `provider` (required): "dropbox" or "googleDrive"
+- `snapshot_id` (required): Snapshot ID from list_backups
+- `confirm` (required): Must be `true` to proceed
+
+**Example:**
+```
+Restore my-blog from Dropbox backup abc123 (confirm: true)
+```
+
+**Warning:** This will overwrite current site files and database.
+
+### delete_backup
+Delete a backup from cloud storage.
+
+**Parameters:**
+- `site` (required): Site name or ID
+- `provider` (required): "dropbox" or "googleDrive"
+- `snapshot_id` (required): Snapshot ID from list_backups
+- `confirm` (required): Must be `true` to proceed
+
+**Example:**
+```
+Delete backup abc123 from Dropbox for my-blog (confirm: true)
+```
+
+### download_backup
+Download a backup as a ZIP file to your Downloads folder.
+
+**Parameters:**
+- `site` (required): Site name or ID
+- `provider` (required): "dropbox" or "googleDrive"
+- `snapshot_id` (required): Snapshot ID from list_backups
+
+**Example:**
+```
+Download backup abc123 from Dropbox for my-blog
+```
+
+### edit_backup_note
+Update the description/note for a backup.
+
+**Parameters:**
+- `site` (required): Site name or ID
+- `provider` (required): "dropbox" or "googleDrive"
+- `snapshot_id` (required): Snapshot ID from list_backups
+- `note` (required): New note for the backup
+
+**Example:**
+```
+Update the note for backup abc123 to "Stable version before redesign"
+```
+
 ## WP Engine Connect Tools
 
 These tools enable integration with WP Engine hosting, allowing you to push and pull changes between your local sites and WP Engine environments.

@@ -482,6 +482,161 @@ const tools = [
       },
     },
   },
+  // Phase 10: Cloud Backups
+  {
+    name: 'backup_status',
+    description: 'Check if cloud backups are available and authenticated. Shows Dropbox and Google Drive status.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'list_backups',
+    description: 'List all cloud backups for a site from Dropbox or Google Drive',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        site: {
+          type: 'string',
+          description: 'Site name or ID',
+        },
+        provider: {
+          type: 'string',
+          enum: ['dropbox', 'googleDrive'],
+          description: 'Cloud storage provider',
+        },
+      },
+      required: ['site', 'provider'],
+    },
+  },
+  {
+    name: 'create_backup',
+    description: 'Create a backup of a site to cloud storage (Dropbox or Google Drive)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        site: {
+          type: 'string',
+          description: 'Site name or ID',
+        },
+        provider: {
+          type: 'string',
+          enum: ['dropbox', 'googleDrive'],
+          description: 'Cloud storage provider',
+        },
+        note: {
+          type: 'string',
+          description: 'Optional note/description for the backup',
+        },
+      },
+      required: ['site', 'provider'],
+    },
+  },
+  {
+    name: 'restore_backup',
+    description: 'Restore a site from a cloud backup. WARNING: This will overwrite current site files and database.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        site: {
+          type: 'string',
+          description: 'Site name or ID',
+        },
+        provider: {
+          type: 'string',
+          enum: ['dropbox', 'googleDrive'],
+          description: 'Cloud storage provider',
+        },
+        snapshot_id: {
+          type: 'string',
+          description: 'Snapshot ID to restore (from list_backups)',
+        },
+        confirm: {
+          type: 'boolean',
+          description: 'Must be true to confirm restoration',
+        },
+      },
+      required: ['site', 'provider', 'snapshot_id', 'confirm'],
+    },
+  },
+  {
+    name: 'delete_backup',
+    description: 'Delete a backup from cloud storage',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        site: {
+          type: 'string',
+          description: 'Site name or ID',
+        },
+        provider: {
+          type: 'string',
+          enum: ['dropbox', 'googleDrive'],
+          description: 'Cloud storage provider',
+        },
+        snapshot_id: {
+          type: 'string',
+          description: 'Snapshot ID to delete (from list_backups)',
+        },
+        confirm: {
+          type: 'boolean',
+          description: 'Must be true to confirm deletion',
+        },
+      },
+      required: ['site', 'provider', 'snapshot_id', 'confirm'],
+    },
+  },
+  {
+    name: 'download_backup',
+    description: 'Download a backup as a ZIP file to the Downloads folder',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        site: {
+          type: 'string',
+          description: 'Site name or ID',
+        },
+        provider: {
+          type: 'string',
+          enum: ['dropbox', 'googleDrive'],
+          description: 'Cloud storage provider',
+        },
+        snapshot_id: {
+          type: 'string',
+          description: 'Snapshot ID to download (from list_backups)',
+        },
+      },
+      required: ['site', 'provider', 'snapshot_id'],
+    },
+  },
+  {
+    name: 'edit_backup_note',
+    description: 'Update the note/description for a backup',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        site: {
+          type: 'string',
+          description: 'Site name or ID',
+        },
+        provider: {
+          type: 'string',
+          enum: ['dropbox', 'googleDrive'],
+          description: 'Cloud storage provider',
+        },
+        snapshot_id: {
+          type: 'string',
+          description: 'Snapshot ID to edit (from list_backups)',
+        },
+        note: {
+          type: 'string',
+          description: 'New note/description for the backup',
+        },
+      },
+      required: ['site', 'provider', 'snapshot_id', 'note'],
+    },
+  },
   // Phase 11: WP Engine Connect
   {
     name: 'wpe_status',
@@ -1566,6 +1721,320 @@ async function handleTool(name, args) {
         content: [{
           type: 'text',
           text: JSON.stringify({ services: result.services, count: result.services.length }, null, 2),
+        }],
+      };
+    }
+
+    // Phase 10: Cloud Backups
+    case 'backup_status': {
+      const data = await graphqlRequest(`
+        query {
+          backupStatus {
+            available
+            featureEnabled
+            dropbox {
+              authenticated
+              accountId
+              email
+            }
+            googleDrive {
+              authenticated
+              accountId
+              email
+            }
+            message
+            error
+          }
+        }
+      `);
+
+      const result = data.backupStatus;
+      if (result.error) {
+        return {
+          content: [{ type: 'text', text: `Backup status check failed: ${result.error}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify(result, null, 2),
+        }],
+      };
+    }
+
+    case 'list_backups': {
+      const site = await findSite(args.site);
+      if (!site) {
+        return {
+          content: [{ type: 'text', text: `Site not found: ${args.site}` }],
+          isError: true,
+        };
+      }
+
+      const data = await graphqlRequest(`
+        query ListBackups($siteId: ID!, $provider: String!) {
+          listBackups(siteId: $siteId, provider: $provider) {
+            success
+            siteName
+            provider
+            backups {
+              snapshotId
+              timestamp
+              note
+              siteDomain
+              services
+            }
+            count
+            error
+          }
+        }
+      `, {
+        siteId: site.id,
+        provider: args.provider,
+      });
+
+      const result = data.listBackups;
+      if (!result.success) {
+        return {
+          content: [{ type: 'text', text: `Failed to list backups: ${result.error}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            siteName: result.siteName,
+            provider: result.provider,
+            backups: result.backups,
+            count: result.count,
+          }, null, 2),
+        }],
+      };
+    }
+
+    case 'create_backup': {
+      const site = await findSite(args.site);
+      if (!site) {
+        return {
+          content: [{ type: 'text', text: `Site not found: ${args.site}` }],
+          isError: true,
+        };
+      }
+
+      const data = await graphqlRequest(`
+        mutation CreateBackup($siteId: ID!, $provider: String!, $note: String) {
+          createBackup(siteId: $siteId, provider: $provider, note: $note) {
+            success
+            snapshotId
+            timestamp
+            message
+            error
+          }
+        }
+      `, {
+        siteId: site.id,
+        provider: args.provider,
+        note: args.note,
+      });
+
+      const result = data.createBackup;
+      if (!result.success) {
+        return {
+          content: [{ type: 'text', text: `Failed to create backup: ${result.error}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            success: true,
+            snapshotId: result.snapshotId,
+            timestamp: result.timestamp,
+            message: result.message,
+          }, null, 2),
+        }],
+      };
+    }
+
+    case 'restore_backup': {
+      const site = await findSite(args.site);
+      if (!site) {
+        return {
+          content: [{ type: 'text', text: `Site not found: ${args.site}` }],
+          isError: true,
+        };
+      }
+
+      const data = await graphqlRequest(`
+        mutation RestoreBackup($siteId: ID!, $provider: String!, $snapshotId: String!, $confirm: Boolean) {
+          restoreBackup(siteId: $siteId, provider: $provider, snapshotId: $snapshotId, confirm: $confirm) {
+            success
+            message
+            error
+          }
+        }
+      `, {
+        siteId: site.id,
+        provider: args.provider,
+        snapshotId: args.snapshot_id,
+        confirm: args.confirm === true,
+      });
+
+      const result = data.restoreBackup;
+      if (!result.success) {
+        return {
+          content: [{ type: 'text', text: `Failed to restore backup: ${result.error}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            success: true,
+            message: result.message,
+          }, null, 2),
+        }],
+      };
+    }
+
+    case 'delete_backup': {
+      const site = await findSite(args.site);
+      if (!site) {
+        return {
+          content: [{ type: 'text', text: `Site not found: ${args.site}` }],
+          isError: true,
+        };
+      }
+
+      const data = await graphqlRequest(`
+        mutation DeleteBackup($siteId: ID!, $provider: String!, $snapshotId: String!, $confirm: Boolean) {
+          deleteBackup(siteId: $siteId, provider: $provider, snapshotId: $snapshotId, confirm: $confirm) {
+            success
+            deletedSnapshotId
+            message
+            error
+          }
+        }
+      `, {
+        siteId: site.id,
+        provider: args.provider,
+        snapshotId: args.snapshot_id,
+        confirm: args.confirm === true,
+      });
+
+      const result = data.deleteBackup;
+      if (!result.success) {
+        return {
+          content: [{ type: 'text', text: `Failed to delete backup: ${result.error}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            success: true,
+            deletedSnapshotId: result.deletedSnapshotId,
+            message: result.message,
+          }, null, 2),
+        }],
+      };
+    }
+
+    case 'download_backup': {
+      const site = await findSite(args.site);
+      if (!site) {
+        return {
+          content: [{ type: 'text', text: `Site not found: ${args.site}` }],
+          isError: true,
+        };
+      }
+
+      const data = await graphqlRequest(`
+        mutation DownloadBackup($siteId: ID!, $provider: String!, $snapshotId: String!) {
+          downloadBackup(siteId: $siteId, provider: $provider, snapshotId: $snapshotId) {
+            success
+            filePath
+            message
+            error
+          }
+        }
+      `, {
+        siteId: site.id,
+        provider: args.provider,
+        snapshotId: args.snapshot_id,
+      });
+
+      const result = data.downloadBackup;
+      if (!result.success) {
+        return {
+          content: [{ type: 'text', text: `Failed to download backup: ${result.error}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            success: true,
+            filePath: result.filePath,
+            message: result.message,
+          }, null, 2),
+        }],
+      };
+    }
+
+    case 'edit_backup_note': {
+      const site = await findSite(args.site);
+      if (!site) {
+        return {
+          content: [{ type: 'text', text: `Site not found: ${args.site}` }],
+          isError: true,
+        };
+      }
+
+      const data = await graphqlRequest(`
+        mutation EditBackupNote($siteId: ID!, $provider: String!, $snapshotId: String!, $note: String!) {
+          editBackupNote(siteId: $siteId, provider: $provider, snapshotId: $snapshotId, note: $note) {
+            success
+            snapshotId
+            note
+            error
+          }
+        }
+      `, {
+        siteId: site.id,
+        provider: args.provider,
+        snapshotId: args.snapshot_id,
+        note: args.note,
+      });
+
+      const result = data.editBackupNote;
+      if (!result.success) {
+        return {
+          content: [{ type: 'text', text: `Failed to edit backup note: ${result.error}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            success: true,
+            snapshotId: result.snapshotId,
+            note: result.note,
+          }, null, 2),
         }],
       };
     }

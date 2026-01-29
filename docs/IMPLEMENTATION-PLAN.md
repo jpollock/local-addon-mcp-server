@@ -19,10 +19,10 @@
 | Phase 7: Testing & Quality | ⚠️ Partial | 2/5 tasks |
 | Phase 8: WordPress Dev Tools | ✅ Complete | 7/7 tasks |
 | Phase 9: Site Config & Dev | ⚠️ Partial | 3/6 tasks |
-| Phase 10: Backup & Restore | 📋 Planned | 0/7 tasks |
+| Phase 10: Backup & Restore | ✅ Complete | 7/7 tasks |
 | Phase 11: Connect/Sync | ✅ Complete | 3/3 sub-phases |
 
-**Current Release:** v0.0.3 (33 tools with Phase 11 complete)
+**Current Release:** v0.0.3 (40 tools with Phase 10 & 11 complete)
 
 ---
 
@@ -504,28 +504,28 @@ src/
 
 ---
 
-## Phase 10: Backup & Restore (Planned)
+## Phase 10: Backup & Restore ✅ Complete
 
 **Goal:** Cloud backup management (requires `localBackups` feature flag)
 **Design Document:** [PHASE-10-BACKUPS.md](./PHASE-10-BACKUPS.md)
 **Branch:** `feature/phase-10-backups`
 
-### Phase 10a: Status & Discovery
+### Phase 10a: Status & Discovery ✅
 
 | Task | Tool | Priority | Status |
 |------|------|----------|--------|
-| 10a.1 | `backup_status` | High | ❌ |
-| 10a.2 | `list_backups` | High | ❌ |
+| 10a.1 | `backup_status` | High | ✅ |
+| 10a.2 | `list_backups` | High | ✅ |
 
-### Phase 10b: Backup Operations
+### Phase 10b: Backup Operations ✅
 
 | Task | Tool | Priority | Status |
 |------|------|----------|--------|
-| 10b.1 | `create_backup` | High | ❌ |
-| 10b.2 | `restore_backup` | High | ❌ |
-| 10b.3 | `delete_backup` | Medium | ❌ |
-| 10b.4 | `download_backup` | Medium | ❌ |
-| 10b.5 | `edit_backup_note` | Low | ❌ |
+| 10b.1 | `create_backup` | High | ✅ |
+| 10b.2 | `restore_backup` | High | ✅ |
+| 10b.3 | `delete_backup` | Medium | ✅ |
+| 10b.4 | `download_backup` | Medium | ✅ |
+| 10b.5 | `edit_backup_note` | Low | ✅ |
 
 **Design Decisions:**
 - Dropbox + Google Drive only (Local's supported providers)
@@ -642,6 +642,16 @@ The following features are explicitly excluded:
 ---
 
 ## Changelog
+
+### 2026-01-29 (Update 12)
+- Phase 10: Implementation complete - 7 cloud backup tools
+- Implemented: backup_status, list_backups, create_backup, restore_backup, delete_backup, download_backup, edit_backup_note
+- Added GraphQL types and resolvers for all backup operations
+- Added stdio transport handlers for all backup tools
+- Feature flag integration (localBackups)
+- Confirmation required for restore and delete operations
+- Updated User Guide with Cloud Backup Tools section
+- Total tools: 40
 
 ### 2026-01-29 (Update 11)
 - Phase 10: Detailed design document created (PHASE-10-BACKUPS.md)

@@ -609,7 +609,122 @@ const typeDefs = gql`
     error: String
   }
 
+  # Phase 10: Cloud Backup Types
+  type BackupProviderStatus {
+    "Whether authenticated with provider"
+    authenticated: Boolean!
+    "Account ID"
+    accountId: String
+    "Account email"
+    email: String
+  }
+
+  type BackupStatusResult {
+    "Whether backups are available"
+    available: Boolean!
+    "Whether the feature is enabled"
+    featureEnabled: Boolean!
+    "Dropbox authentication status"
+    dropbox: BackupProviderStatus
+    "Google Drive authentication status"
+    googleDrive: BackupProviderStatus
+    "Message if backups unavailable"
+    message: String
+    "Error message if failed"
+    error: String
+  }
+
+  type BackupMetadata {
+    "Snapshot ID"
+    snapshotId: String!
+    "Backup timestamp (ISO format)"
+    timestamp: String
+    "Backup note/description"
+    note: String
+    "Site domain"
+    siteDomain: String
+    "Services info (JSON)"
+    services: String
+  }
+
+  type ListBackupsResult {
+    "Whether query was successful"
+    success: Boolean!
+    "Site name"
+    siteName: String
+    "Backup provider"
+    provider: String
+    "List of backups"
+    backups: [BackupMetadata!]
+    "Number of backups"
+    count: Int
+    "Error message if failed"
+    error: String
+  }
+
+  type CreateBackupResult {
+    "Whether backup was created successfully"
+    success: Boolean!
+    "Snapshot ID"
+    snapshotId: String
+    "Backup timestamp"
+    timestamp: String
+    "Status message"
+    message: String
+    "Error message if failed"
+    error: String
+  }
+
+  type RestoreBackupResult {
+    "Whether restore was successful"
+    success: Boolean!
+    "Status message"
+    message: String
+    "Error message if failed"
+    error: String
+  }
+
+  type DeleteBackupResult {
+    "Whether deletion was successful"
+    success: Boolean!
+    "Deleted snapshot ID"
+    deletedSnapshotId: String
+    "Status message"
+    message: String
+    "Error message if failed"
+    error: String
+  }
+
+  type DownloadBackupResult {
+    "Whether download was successful"
+    success: Boolean!
+    "Path to downloaded file"
+    filePath: String
+    "Status message"
+    message: String
+    "Error message if failed"
+    error: String
+  }
+
+  type EditBackupNoteResult {
+    "Whether edit was successful"
+    success: Boolean!
+    "Updated snapshot ID"
+    snapshotId: String
+    "Updated note"
+    note: String
+    "Error message if failed"
+    error: String
+  }
+
   extend type Query {
+    # Phase 10: Cloud Backups
+    "Check if cloud backups are available and authenticated"
+    backupStatus: BackupStatusResult!
+
+    "List all backups for a site"
+    listBackups(siteId: ID!, provider: String!): ListBackupsResult!
+
     # Phase 11c: Sync Operations
     "Get sync history for a local site"
     getSyncHistory(siteId: ID!, limit: Int): GetSyncHistoryResult!
@@ -619,6 +734,45 @@ const typeDefs = gql`
   }
 
   extend type Mutation {
+    # Phase 10: Cloud Backups
+    "Create a backup of a site to cloud storage"
+    createBackup(
+      siteId: ID!
+      provider: String!
+      note: String
+    ): CreateBackupResult!
+
+    "Restore a site from a cloud backup"
+    restoreBackup(
+      siteId: ID!
+      provider: String!
+      snapshotId: String!
+      confirm: Boolean = false
+    ): RestoreBackupResult!
+
+    "Delete a backup from cloud storage"
+    deleteBackup(
+      siteId: ID!
+      provider: String!
+      snapshotId: String!
+      confirm: Boolean = false
+    ): DeleteBackupResult!
+
+    "Download a backup as a ZIP file"
+    downloadBackup(
+      siteId: ID!
+      provider: String!
+      snapshotId: String!
+    ): DownloadBackupResult!
+
+    "Update the note/description for a backup"
+    editBackupNote(
+      siteId: ID!
+      provider: String!
+      snapshotId: String!
+      note: String!
+    ): EditBackupNoteResult!
+
     # Phase 11: WP Engine Connect
     "Authenticate with WP Engine (opens browser for OAuth)"
     wpeAuthenticate: WpeAuthResult!
@@ -674,6 +828,11 @@ function createResolvers(services: any) {
     wpePull: wpePullService,
     connectHistory: connectHistoryService,
     wpeConnectBase: wpeConnectBaseService,
+    // Phase 10: Cloud Backup services
+    backup: backupService,
+    dropbox: dropboxService,
+    googleDrive: googleDriveService,
+    featureFlags: featureFlagsService,
   } = services;
 
   // Shared WP-CLI execution logic
@@ -1069,6 +1228,198 @@ function createResolvers(services: any) {
             connections: [],
             connectionCount: 0,
             message: null,
+            error: error.message || 'Unknown error',
+          };
+        }
+      },
+
+      // Phase 10: Cloud Backups
+      backupStatus: async () => {
+        try {
+          localLogger.info(`[${ADDON_NAME}] Checking backup status`);
+
+          // Check feature flag
+          const featureEnabled = featureFlagsService?.isFeatureEnabled('localBackups') ?? false;
+
+          if (!featureEnabled) {
+            return {
+              available: false,
+              featureEnabled: false,
+              dropbox: null,
+              googleDrive: null,
+              message: 'Cloud Backups feature is not enabled in Local',
+              error: null,
+            };
+          }
+
+          // Check Dropbox authentication
+          let dropboxStatus = { authenticated: false, accountId: null, email: null };
+          if (dropboxService) {
+            try {
+              const accounts = await dropboxService.getAccounts();
+              if (accounts && accounts.length > 0) {
+                dropboxStatus = {
+                  authenticated: true,
+                  accountId: accounts[0].id,
+                  email: accounts[0].email,
+                };
+              }
+            } catch {
+              // Not authenticated
+            }
+          }
+
+          // Check Google Drive authentication
+          let googleDriveStatus = { authenticated: false, accountId: null, email: null };
+          if (googleDriveService) {
+            try {
+              const accounts = await googleDriveService.getAccounts();
+              if (accounts && accounts.length > 0) {
+                googleDriveStatus = {
+                  authenticated: true,
+                  accountId: accounts[0].id,
+                  email: accounts[0].email,
+                };
+              }
+            } catch {
+              // Not authenticated
+            }
+          }
+
+          const hasProvider = dropboxStatus.authenticated || googleDriveStatus.authenticated;
+
+          return {
+            available: hasProvider,
+            featureEnabled: true,
+            dropbox: dropboxStatus,
+            googleDrive: googleDriveStatus,
+            message: hasProvider ? null : 'No cloud storage provider authenticated. Connect Dropbox or Google Drive in Local settings.',
+            error: null,
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] Failed to check backup status:`, error);
+          return {
+            available: false,
+            featureEnabled: false,
+            dropbox: null,
+            googleDrive: null,
+            message: null,
+            error: error.message || 'Unknown error',
+          };
+        }
+      },
+
+      listBackups: async (_parent: any, args: { siteId: string; provider: string }) => {
+        const { siteId, provider } = args;
+
+        try {
+          localLogger.info(`[${ADDON_NAME}] Listing backups for site ${siteId} from ${provider}`);
+
+          // Validate provider
+          if (provider !== 'dropbox' && provider !== 'googleDrive') {
+            return {
+              success: false,
+              siteName: null,
+              provider,
+              backups: [],
+              count: 0,
+              error: `Invalid provider: ${provider}. Use 'dropbox' or 'googleDrive'.`,
+            };
+          }
+
+          // Check feature flag
+          if (!featureFlagsService?.isFeatureEnabled('localBackups')) {
+            return {
+              success: false,
+              siteName: null,
+              provider,
+              backups: [],
+              count: 0,
+              error: 'Cloud Backups feature is not enabled in Local',
+            };
+          }
+
+          // Get site
+          const site = siteData.getSite(siteId);
+          if (!site) {
+            return {
+              success: false,
+              siteName: null,
+              provider,
+              backups: [],
+              count: 0,
+              error: `Site not found: ${siteId}`,
+            };
+          }
+
+          // Check if backup service is available
+          if (!backupService) {
+            return {
+              success: false,
+              siteName: site.name,
+              provider,
+              backups: [],
+              count: 0,
+              error: 'Backup service not available',
+            };
+          }
+
+          // Get account ID for provider
+          const providerService = provider === 'dropbox' ? dropboxService : googleDriveService;
+          if (!providerService) {
+            return {
+              success: false,
+              siteName: site.name,
+              provider,
+              backups: [],
+              count: 0,
+              error: `${provider} service not available`,
+            };
+          }
+
+          const accounts = await providerService.getAccounts();
+          if (!accounts || accounts.length === 0) {
+            return {
+              success: false,
+              siteName: site.name,
+              provider,
+              backups: [],
+              count: 0,
+              error: `Not authenticated with ${provider}. Connect it in Local's Cloud Backups settings.`,
+            };
+          }
+
+          const accountId = accounts[0].id;
+
+          // List backups
+          const backups = await backupService.listBackups({
+            site,
+            provider: provider as 'dropbox' | 'googleDrive',
+            accountId,
+          });
+
+          return {
+            success: true,
+            siteName: site.name,
+            provider,
+            backups: backups.map((b: any) => ({
+              snapshotId: b.snapshotId,
+              timestamp: b.timestamp,
+              note: b.note,
+              siteDomain: b.siteDomain,
+              services: JSON.stringify(b.services || {}),
+            })),
+            count: backups.length,
+            error: null,
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] Failed to list backups:`, error);
+          return {
+            success: false,
+            siteName: null,
+            provider,
+            backups: [],
+            count: 0,
             error: error.message || 'Unknown error',
           };
         }
@@ -2359,6 +2710,502 @@ function createResolvers(services: any) {
             success: false,
             error: error.message || 'Unknown error',
             logs: [],
+          };
+        }
+      },
+
+      // Phase 10: Cloud Backup Mutations
+      createBackup: async (_parent: any, args: { siteId: string; provider: string; note?: string }) => {
+        const { siteId, provider, note } = args;
+
+        try {
+          localLogger.info(`[${ADDON_NAME}] Creating backup for site ${siteId} to ${provider}`);
+
+          // Validate provider
+          if (provider !== 'dropbox' && provider !== 'googleDrive') {
+            return {
+              success: false,
+              snapshotId: null,
+              timestamp: null,
+              message: null,
+              error: `Invalid provider: ${provider}. Use 'dropbox' or 'googleDrive'.`,
+            };
+          }
+
+          // Check feature flag
+          if (!featureFlagsService?.isFeatureEnabled('localBackups')) {
+            return {
+              success: false,
+              snapshotId: null,
+              timestamp: null,
+              message: null,
+              error: 'Cloud Backups feature is not enabled in Local',
+            };
+          }
+
+          // Get site
+          const site = siteData.getSite(siteId);
+          if (!site) {
+            return {
+              success: false,
+              snapshotId: null,
+              timestamp: null,
+              message: null,
+              error: `Site not found: ${siteId}`,
+            };
+          }
+
+          // Check if backup service is available
+          if (!backupService) {
+            return {
+              success: false,
+              snapshotId: null,
+              timestamp: null,
+              message: null,
+              error: 'Backup service not available',
+            };
+          }
+
+          // Get account ID for provider
+          const providerService = provider === 'dropbox' ? dropboxService : googleDriveService;
+          if (!providerService) {
+            return {
+              success: false,
+              snapshotId: null,
+              timestamp: null,
+              message: null,
+              error: `${provider} service not available`,
+            };
+          }
+
+          const accounts = await providerService.getAccounts();
+          if (!accounts || accounts.length === 0) {
+            return {
+              success: false,
+              snapshotId: null,
+              timestamp: null,
+              message: null,
+              error: `Not authenticated with ${provider}. Connect it in Local's Cloud Backups settings.`,
+            };
+          }
+
+          const accountId = accounts[0].id;
+
+          // Create backup
+          const result = await backupService.createBackup({
+            site,
+            provider: provider as 'dropbox' | 'googleDrive',
+            accountId,
+            note,
+          });
+
+          return {
+            success: true,
+            snapshotId: result.snapshotId,
+            timestamp: result.timestamp,
+            message: 'Backup created successfully',
+            error: null,
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] Failed to create backup:`, error);
+          return {
+            success: false,
+            snapshotId: null,
+            timestamp: null,
+            message: null,
+            error: error.message || 'Unknown error',
+          };
+        }
+      },
+
+      restoreBackup: async (_parent: any, args: { siteId: string; provider: string; snapshotId: string; confirm?: boolean }) => {
+        const { siteId, provider, snapshotId, confirm = false } = args;
+
+        try {
+          localLogger.info(`[${ADDON_NAME}] Restoring backup ${snapshotId} for site ${siteId}`);
+
+          // Check confirmation
+          if (!confirm) {
+            return {
+              success: false,
+              message: null,
+              error: 'Restore requires confirm=true to prevent accidental data loss. Current site files and database will be overwritten.',
+            };
+          }
+
+          // Validate provider
+          if (provider !== 'dropbox' && provider !== 'googleDrive') {
+            return {
+              success: false,
+              message: null,
+              error: `Invalid provider: ${provider}. Use 'dropbox' or 'googleDrive'.`,
+            };
+          }
+
+          // Check feature flag
+          if (!featureFlagsService?.isFeatureEnabled('localBackups')) {
+            return {
+              success: false,
+              message: null,
+              error: 'Cloud Backups feature is not enabled in Local',
+            };
+          }
+
+          // Get site
+          const site = siteData.getSite(siteId);
+          if (!site) {
+            return {
+              success: false,
+              message: null,
+              error: `Site not found: ${siteId}`,
+            };
+          }
+
+          // Check if backup service is available
+          if (!backupService) {
+            return {
+              success: false,
+              message: null,
+              error: 'Backup service not available',
+            };
+          }
+
+          // Get account ID for provider
+          const providerService = provider === 'dropbox' ? dropboxService : googleDriveService;
+          if (!providerService) {
+            return {
+              success: false,
+              message: null,
+              error: `${provider} service not available`,
+            };
+          }
+
+          const accounts = await providerService.getAccounts();
+          if (!accounts || accounts.length === 0) {
+            return {
+              success: false,
+              message: null,
+              error: `Not authenticated with ${provider}. Connect it in Local's Cloud Backups settings.`,
+            };
+          }
+
+          const accountId = accounts[0].id;
+
+          // Restore backup
+          await backupService.restoreBackup({
+            site,
+            provider: provider as 'dropbox' | 'googleDrive',
+            accountId,
+            snapshotId,
+          });
+
+          return {
+            success: true,
+            message: `Site restored from backup ${snapshotId}`,
+            error: null,
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] Failed to restore backup:`, error);
+          return {
+            success: false,
+            message: null,
+            error: error.message || 'Unknown error',
+          };
+        }
+      },
+
+      deleteBackup: async (_parent: any, args: { siteId: string; provider: string; snapshotId: string; confirm?: boolean }) => {
+        const { siteId, provider, snapshotId, confirm = false } = args;
+
+        try {
+          localLogger.info(`[${ADDON_NAME}] Deleting backup ${snapshotId} for site ${siteId}`);
+
+          // Check confirmation
+          if (!confirm) {
+            return {
+              success: false,
+              deletedSnapshotId: null,
+              message: null,
+              error: 'Delete requires confirm=true to prevent accidental deletion.',
+            };
+          }
+
+          // Validate provider
+          if (provider !== 'dropbox' && provider !== 'googleDrive') {
+            return {
+              success: false,
+              deletedSnapshotId: null,
+              message: null,
+              error: `Invalid provider: ${provider}. Use 'dropbox' or 'googleDrive'.`,
+            };
+          }
+
+          // Check feature flag
+          if (!featureFlagsService?.isFeatureEnabled('localBackups')) {
+            return {
+              success: false,
+              deletedSnapshotId: null,
+              message: null,
+              error: 'Cloud Backups feature is not enabled in Local',
+            };
+          }
+
+          // Get site
+          const site = siteData.getSite(siteId);
+          if (!site) {
+            return {
+              success: false,
+              deletedSnapshotId: null,
+              message: null,
+              error: `Site not found: ${siteId}`,
+            };
+          }
+
+          // Check if backup service is available
+          if (!backupService) {
+            return {
+              success: false,
+              deletedSnapshotId: null,
+              message: null,
+              error: 'Backup service not available',
+            };
+          }
+
+          // Get account ID for provider
+          const providerService = provider === 'dropbox' ? dropboxService : googleDriveService;
+          if (!providerService) {
+            return {
+              success: false,
+              deletedSnapshotId: null,
+              message: null,
+              error: `${provider} service not available`,
+            };
+          }
+
+          const accounts = await providerService.getAccounts();
+          if (!accounts || accounts.length === 0) {
+            return {
+              success: false,
+              deletedSnapshotId: null,
+              message: null,
+              error: `Not authenticated with ${provider}. Connect it in Local's Cloud Backups settings.`,
+            };
+          }
+
+          const accountId = accounts[0].id;
+
+          // Delete backup
+          await backupService.deleteBackup({
+            site,
+            provider: provider as 'dropbox' | 'googleDrive',
+            accountId,
+            snapshotId,
+          });
+
+          return {
+            success: true,
+            deletedSnapshotId: snapshotId,
+            message: 'Backup deleted',
+            error: null,
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] Failed to delete backup:`, error);
+          return {
+            success: false,
+            deletedSnapshotId: null,
+            message: null,
+            error: error.message || 'Unknown error',
+          };
+        }
+      },
+
+      downloadBackup: async (_parent: any, args: { siteId: string; provider: string; snapshotId: string }) => {
+        const { siteId, provider, snapshotId } = args;
+
+        try {
+          localLogger.info(`[${ADDON_NAME}] Downloading backup ${snapshotId} for site ${siteId}`);
+
+          // Validate provider
+          if (provider !== 'dropbox' && provider !== 'googleDrive') {
+            return {
+              success: false,
+              filePath: null,
+              message: null,
+              error: `Invalid provider: ${provider}. Use 'dropbox' or 'googleDrive'.`,
+            };
+          }
+
+          // Check feature flag
+          if (!featureFlagsService?.isFeatureEnabled('localBackups')) {
+            return {
+              success: false,
+              filePath: null,
+              message: null,
+              error: 'Cloud Backups feature is not enabled in Local',
+            };
+          }
+
+          // Get site
+          const site = siteData.getSite(siteId);
+          if (!site) {
+            return {
+              success: false,
+              filePath: null,
+              message: null,
+              error: `Site not found: ${siteId}`,
+            };
+          }
+
+          // Check if backup service is available
+          if (!backupService) {
+            return {
+              success: false,
+              filePath: null,
+              message: null,
+              error: 'Backup service not available',
+            };
+          }
+
+          // Get account ID for provider
+          const providerService = provider === 'dropbox' ? dropboxService : googleDriveService;
+          if (!providerService) {
+            return {
+              success: false,
+              filePath: null,
+              message: null,
+              error: `${provider} service not available`,
+            };
+          }
+
+          const accounts = await providerService.getAccounts();
+          if (!accounts || accounts.length === 0) {
+            return {
+              success: false,
+              filePath: null,
+              message: null,
+              error: `Not authenticated with ${provider}. Connect it in Local's Cloud Backups settings.`,
+            };
+          }
+
+          const accountId = accounts[0].id;
+
+          // Download backup
+          const filePath = await backupService.downloadZip({
+            site,
+            provider: provider as 'dropbox' | 'googleDrive',
+            accountId,
+            snapshotId,
+          });
+
+          return {
+            success: true,
+            filePath,
+            message: 'Backup downloaded to Downloads folder',
+            error: null,
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] Failed to download backup:`, error);
+          return {
+            success: false,
+            filePath: null,
+            message: null,
+            error: error.message || 'Unknown error',
+          };
+        }
+      },
+
+      editBackupNote: async (_parent: any, args: { siteId: string; provider: string; snapshotId: string; note: string }) => {
+        const { siteId, provider, snapshotId, note } = args;
+
+        try {
+          localLogger.info(`[${ADDON_NAME}] Editing backup note for ${snapshotId}`);
+
+          // Validate provider
+          if (provider !== 'dropbox' && provider !== 'googleDrive') {
+            return {
+              success: false,
+              snapshotId: null,
+              note: null,
+              error: `Invalid provider: ${provider}. Use 'dropbox' or 'googleDrive'.`,
+            };
+          }
+
+          // Check feature flag
+          if (!featureFlagsService?.isFeatureEnabled('localBackups')) {
+            return {
+              success: false,
+              snapshotId: null,
+              note: null,
+              error: 'Cloud Backups feature is not enabled in Local',
+            };
+          }
+
+          // Get site
+          const site = siteData.getSite(siteId);
+          if (!site) {
+            return {
+              success: false,
+              snapshotId: null,
+              note: null,
+              error: `Site not found: ${siteId}`,
+            };
+          }
+
+          // Check if backup service is available
+          if (!backupService) {
+            return {
+              success: false,
+              snapshotId: null,
+              note: null,
+              error: 'Backup service not available',
+            };
+          }
+
+          // Get account ID for provider
+          const providerService = provider === 'dropbox' ? dropboxService : googleDriveService;
+          if (!providerService) {
+            return {
+              success: false,
+              snapshotId: null,
+              note: null,
+              error: `${provider} service not available`,
+            };
+          }
+
+          const accounts = await providerService.getAccounts();
+          if (!accounts || accounts.length === 0) {
+            return {
+              success: false,
+              snapshotId: null,
+              note: null,
+              error: `Not authenticated with ${provider}. Connect it in Local's Cloud Backups settings.`,
+            };
+          }
+
+          const accountId = accounts[0].id;
+
+          // Edit backup description
+          await backupService.editBackupDescription({
+            site,
+            provider: provider as 'dropbox' | 'googleDrive',
+            accountId,
+            snapshotId,
+            newDescription: note,
+          });
+
+          return {
+            success: true,
+            snapshotId,
+            note,
+            error: null,
+          };
+        } catch (error: any) {
+          localLogger.error(`[${ADDON_NAME}] Failed to edit backup note:`, error);
+          return {
+            success: false,
+            snapshotId: null,
+            note: null,
+            error: error.message || 'Unknown error',
           };
         }
       },
