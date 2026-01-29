@@ -181,7 +181,7 @@ const tools = [
   },
   {
     name: 'create_site',
-    description: 'Create a new WordPress site in Local. The site will be created and started automatically.',
+    description: 'Create a new WordPress site in Local. The site will be created and started automatically. Optionally create from an existing blueprint.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -192,6 +192,10 @@ const tools = [
         php_version: {
           type: 'string',
           description: 'PHP version (e.g., "8.2.10"). Uses Local default if not specified.',
+        },
+        blueprint: {
+          type: 'string',
+          description: 'Blueprint name to create the site from. Use list_blueprints to see available blueprints.',
         },
       },
       required: ['name'],
@@ -677,6 +681,14 @@ async function handleTool(name, args) {
         input.phpVersion = args.php_version;
       }
 
+      if (args.blueprint) {
+        input.blueprint = args.blueprint;
+      }
+
+      // Debug: log the input being sent
+      console.error('[MCP stdio] create_site input:', JSON.stringify(input));
+      console.error('[MCP stdio] args.blueprint value:', args.blueprint);
+
       const data = await graphqlRequest(`
         mutation($input: CreateSiteInput!) {
           createSite(input: $input) {
@@ -697,10 +709,11 @@ async function handleTool(name, args) {
         };
       }
 
+      const fromBlueprint = args.blueprint ? ` (from blueprint: ${args.blueprint})` : '';
       return {
         content: [{
           type: 'text',
-          text: `Created site: ${result.siteName}\nDomain: ${result.siteDomain}\nID: ${result.siteId}\nAdmin: admin / password\n\nThe site is being provisioned and will start automatically.`,
+          text: `Created site: ${result.siteName}${fromBlueprint}\nDomain: ${result.siteDomain}\nID: ${result.siteId}\nAdmin: admin / password\n\nThe site is being provisioned and will start automatically.`,
         }],
       };
     }

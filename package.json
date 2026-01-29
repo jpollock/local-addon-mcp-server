@@ -70,5 +70,8 @@
     "minimumLocalVersion": "9.0.0",
     "type": "addon",
     "category": "developer-tools"
+  },
+  "dependencies": {
+    "node-stream-zip": "^1.15.0"
   }
 }

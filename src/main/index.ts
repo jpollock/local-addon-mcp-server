@@ -74,6 +74,8 @@ const typeDefs = gql`
     wpAdminPassword: String
     "WordPress admin email (default: admin@local.test)"
     wpAdminEmail: String
+    "Blueprint name to create site from. Use list_blueprints to see available blueprints."
+    blueprint: String
   }
 
   type CreateSiteResult {
@@ -593,9 +595,13 @@ function createResolvers(services: any) {
             wpAdminUsername?: string;
             wpAdminPassword?: string;
             wpAdminEmail?: string;
+            blueprint?: string;
           };
         }
       ) => {
+        // DEBUG: Log raw args received
+        localLogger.info(`[${ADDON_NAME}] createSite called with args: ${JSON.stringify(args)}`);
+
         const {
           name,
           phpVersion,
@@ -604,10 +610,16 @@ function createResolvers(services: any) {
           wpAdminUsername = 'admin',
           wpAdminPassword = 'password',
           wpAdminEmail = 'admin@local.test',
+          blueprint,
         } = args.input;
 
+        // DEBUG: Log destructured values
+        localLogger.info(`[${ADDON_NAME}] Destructured - name: ${name}, blueprint: ${blueprint}, typeof blueprint: ${typeof blueprint}`);
+
         try {
-          localLogger.info(`[${ADDON_NAME}] Creating site: ${name}`);
+          localLogger.info(
+            `[${ADDON_NAME}] Creating site: ${name}${blueprint ? ` from blueprint: ${blueprint}` : ''}`
+          );
 
           // Generate slug and domain from name
           const siteSlug = name
@@ -616,11 +628,149 @@ function createResolvers(services: any) {
             .replace(/^-|-$/g, '');
           const siteDomain = `${siteSlug}.local`;
 
-          // Use os.homedir() for the path
           const os = require('os');
           const path = require('path');
+          const fs = require('fs');
           const sitePath = path.join(os.homedir(), 'Local Sites', siteSlug);
 
+          // If blueprint is provided, use importSiteService instead of addSiteService
+          if (blueprint) {
+            localLogger.info(`[${ADDON_NAME}] Blueprint parameter received: ${blueprint}`);
+
+            // Get the userDataPath from electron app
+            const { app } = require('electron');
+            const userDataPath = app.getPath('userData');
+            const blueprintZipPath = path.join(userDataPath, 'blueprints', `${blueprint}.zip`);
+
+            localLogger.info(`[${ADDON_NAME}] Looking for blueprint at: ${blueprintZipPath}`);
+
+            // Verify blueprint exists
+            if (!fs.existsSync(blueprintZipPath)) {
+              localLogger.error(`[${ADDON_NAME}] Blueprint not found at: ${blueprintZipPath}`);
+              return {
+                success: false,
+                error: `Blueprint not found: ${blueprint}. Use list_blueprints to see available blueprints.`,
+                siteId: null,
+                siteName: name,
+                siteDomain: null,
+              };
+            }
+
+            localLogger.info(`[${ADDON_NAME}] Found blueprint at: ${blueprintZipPath}`);
+
+            // Read the local-site.json from the blueprint zip to get manifest
+            let localSiteJSON: any;
+            try {
+              const StreamZip = require('node-stream-zip');
+              localLogger.info(`[${ADDON_NAME}] node-stream-zip loaded successfully`);
+
+              const zip = new StreamZip.async({ file: blueprintZipPath });
+              const entries = await zip.entries();
+              localLogger.info(`[${ADDON_NAME}] Zip entries loaded, count: ${Object.keys(entries).length}`);
+
+              const filename = entries['local-site.json'] ? 'local-site.json' : 'pressmatic-site.json';
+              localLogger.info(`[${ADDON_NAME}] Reading manifest file: ${filename}`);
+
+              const data = await zip.entryData(filename);
+              localSiteJSON = JSON.parse(data.toString('utf8'));
+              await zip.close();
+              localLogger.info(`[${ADDON_NAME}] Successfully read manifest:`, JSON.stringify(localSiteJSON).substring(0, 200));
+            } catch (zipError: any) {
+              localLogger.error(`[${ADDON_NAME}] Failed to read blueprint zip: ${zipError.message}`, zipError);
+              return {
+                success: false,
+                error: `Failed to read blueprint manifest: ${zipError.message}`,
+                siteId: null,
+                siteName: name,
+                siteDomain: null,
+              };
+            }
+
+            // Build import settings
+            const importSettings: any = {
+              siteName: name,
+              siteDomain: siteDomain,
+              sitePath: sitePath,
+              zip: blueprintZipPath,
+              importData: {
+                type: 'local-blueprint',
+                oldSite: localSiteJSON,
+              },
+              environment: localSiteJSON.environment || 'flywheel',
+              blueprint: blueprint,
+            };
+
+            // Copy service versions from blueprint if available
+            if (localSiteJSON.services) {
+              // Extract PHP version
+              const phpService = Object.values(localSiteJSON.services).find(
+                (s: any) => s.role === 'php'
+              ) as any;
+              if (phpService) {
+                importSettings.phpVersion = phpService.version;
+              }
+
+              // Extract database
+              const dbService = Object.values(localSiteJSON.services).find(
+                (s: any) => s.role === 'database' || s.role === 'db'
+              ) as any;
+              if (dbService) {
+                importSettings.database = `${dbService.name}-${dbService.version}`;
+              }
+
+              // Extract web server
+              const webService = Object.values(localSiteJSON.services).find(
+                (s: any) => s.role === 'http' || s.role === 'web'
+              ) as any;
+              if (webService) {
+                importSettings.webServer = `${webService.name}-${webService.version}`;
+              }
+            } else if (localSiteJSON.phpVersion) {
+              importSettings.phpVersion = localSiteJSON.phpVersion;
+            }
+
+            localLogger.info(`[${ADDON_NAME}] Import settings prepared:`, JSON.stringify(importSettings).substring(0, 500));
+
+            if (!importSiteService) {
+              localLogger.error(`[${ADDON_NAME}] importSiteService is not available!`);
+              return {
+                success: false,
+                error: 'Import service not available',
+                siteId: null,
+                siteName: name,
+                siteDomain: null,
+              };
+            }
+
+            localLogger.info(`[${ADDON_NAME}] Calling importSiteService.run()...`);
+
+            // Use the importSiteService to create from blueprint
+            const importResult = await importSiteService.run(importSettings);
+
+            localLogger.info(`[${ADDON_NAME}] Import result:`, JSON.stringify(importResult || 'null').substring(0, 500));
+
+            if (importResult && importResult.id) {
+              localLogger.info(`[${ADDON_NAME}] Successfully created site from blueprint: ${name} (${importResult.id})`);
+              return {
+                success: true,
+                error: null,
+                siteId: importResult.id,
+                siteName: name,
+                siteDomain: siteDomain,
+              };
+            } else {
+              localLogger.warn(`[${ADDON_NAME}] Import returned but no site ID found`);
+              return {
+                success: true,
+                error: null,
+                siteId: null,
+                siteName: name,
+                siteDomain: siteDomain,
+              };
+            }
+          }
+
+          // No blueprint - create a fresh site
           const newSiteInfo: any = {
             siteName: name,
             siteDomain: siteDomain,
@@ -880,10 +1030,13 @@ function createResolvers(services: any) {
 
           localLogger.info(`[${ADDON_NAME}] Exporting site ${site.name} to ${fullPath}`);
 
+          // Use default export filter (excludes archive files)
+          const defaultExportFilter = '*.zip, *.tar.gz, *.bz2, *.tgz';
+
           await exportSiteService.exportSite({
             site,
             outputPath: fullPath,
-            filter: '',
+            filter: defaultExportFilter,
           });
 
           localLogger.info(`[${ADDON_NAME}] Successfully exported site to: ${fullPath}`);
@@ -928,10 +1081,13 @@ function createResolvers(services: any) {
 
           localLogger.info(`[${ADDON_NAME}] Saving site ${site.name} as blueprint: ${name}`);
 
+          // Use default export filter (excludes archive files)
+          const defaultFilter = '*.zip, *.tar.gz, *.bz2, *.tgz';
+
           await blueprintsService.saveBlueprint({
             name,
             siteId,
-            filter: '',
+            filter: defaultFilter,
           });
 
           localLogger.info(`[${ADDON_NAME}] Successfully saved blueprint: ${name}`);
