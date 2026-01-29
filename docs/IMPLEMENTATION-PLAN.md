@@ -2,7 +2,7 @@
 
 **Based on:** RFC-001-MCP-Server.md
 **Target:** local-addon-mcp-server (formerly local-addon-cli-bridge)
-**Last Updated:** 2026-01-28
+**Last Updated:** 2026-01-29
 
 ---
 
@@ -19,7 +19,7 @@
 | Phase 7: Testing & Quality | ⚠️ Partial | 2/5 tasks |
 | Phase 8: WordPress Dev Tools | ✅ Complete | 7/7 tasks |
 | Phase 9: Site Config & Dev | ⚠️ Partial | 3/6 tasks |
-| Phase 10: Backup & Restore | 📋 Proposed | 0/3 tasks |
+| Phase 10: Backup & Restore | 📋 Planned | 0/7 tasks |
 | Phase 11: Connect/Sync | ✅ Complete | 3/3 sub-phases |
 
 **Current Release:** v0.0.3 (33 tools with Phase 11 complete)
@@ -504,15 +504,35 @@ src/
 
 ---
 
-## Phase 10: Backup & Restore (Proposed)
+## Phase 10: Backup & Restore (Planned)
 
-**Goal:** Backup management (requires `localBackups` feature flag)
+**Goal:** Cloud backup management (requires `localBackups` feature flag)
+**Design Document:** [PHASE-10-BACKUPS.md](./PHASE-10-BACKUPS.md)
+**Branch:** `feature/phase-10-backups`
 
-| Task | Tool | Priority | GraphQL Status | Status |
-|------|------|----------|----------------|--------|
-| 10.1 | `create_backup` | Medium | Needs work | ❌ |
-| 10.2 | `list_backups` | Medium | Needs work | ❌ |
-| 10.3 | `restore_backup` | Medium | Needs work | ❌ |
+### Phase 10a: Status & Discovery
+
+| Task | Tool | Priority | Status |
+|------|------|----------|--------|
+| 10a.1 | `backup_status` | High | ❌ |
+| 10a.2 | `list_backups` | High | ❌ |
+
+### Phase 10b: Backup Operations
+
+| Task | Tool | Priority | Status |
+|------|------|----------|--------|
+| 10b.1 | `create_backup` | High | ❌ |
+| 10b.2 | `restore_backup` | High | ❌ |
+| 10b.3 | `delete_backup` | Medium | ❌ |
+| 10b.4 | `download_backup` | Medium | ❌ |
+| 10b.5 | `edit_backup_note` | Low | ❌ |
+
+**Design Decisions:**
+- Dropbox + Google Drive only (Local's supported providers)
+- Feature flag check required (graceful error if disabled)
+- `restore_backup` requires `confirm=true`
+- `delete_backup` requires `confirm=true`
+- Uses BackupService with Restic + Rclone architecture
 
 ---
 
@@ -622,6 +642,15 @@ The following features are explicitly excluded:
 ---
 
 ## Changelog
+
+### 2026-01-29 (Update 11)
+- Phase 10: Detailed design document created (PHASE-10-BACKUPS.md)
+- Expanded from 3 tools to 7 tools across 2 sub-phases
+- Tools: backup_status, list_backups, create_backup, restore_backup, delete_backup, download_backup, edit_backup_note
+- Architecture: BackupService with Restic + Rclone for cloud storage
+- Feature flag requirement documented (localBackups)
+- Phase 11 merged to main and pushed to origin (5 commits, +2246 lines)
+- Updated RFC and User Guide with Phase 11 tools
 
 ### 2026-01-29 (Update 10)
 - Phase 11b: Site Linking (Simplified)
