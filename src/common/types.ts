@@ -148,7 +148,9 @@ export interface LocalServices {
     getInstallList(): Promise<any[] | undefined>;
     getAccountList(): Promise<any[] | undefined>;
     getCurrentUser(): Promise<{ id?: string; email?: string } | undefined>;
-    getInstall(installId: string): Promise<{ id: string; name: string; environment?: string; cname?: string } | undefined>;
+    getInstall(
+      installId: string
+    ): Promise<{ id: string; name: string; environment?: string; cname?: string } | undefined>;
   };
   // Phase 11c: Sync services
   wpePush?: {
@@ -208,13 +210,15 @@ export interface LocalServices {
       };
       direction: 'push' | 'pull';
       includeIgnored?: boolean;
-    }): Promise<Array<{
-      path: string;
-      type: string;
-      size: number;
-      mtime: number;
-      instruction: string;
-    }>>;
+    }): Promise<
+      Array<{
+        path: string;
+        type: string;
+        size: number;
+        mtime: number;
+        instruction: string;
+      }>
+    >;
   };
   // Phase 10: Cloud Backup services
   backup?: {
@@ -228,13 +232,15 @@ export interface LocalServices {
       site: any;
       provider: 'dropbox' | 'googleDrive';
       accountId: string;
-    }): Promise<Array<{
-      snapshotId: string;
-      timestamp: string;
-      note?: string;
-      siteDomain: string;
-      services: Record<string, string>;
-    }>>;
+    }): Promise<
+      Array<{
+        snapshotId: string;
+        timestamp: string;
+        note?: string;
+        siteDomain: string;
+        services: Record<string, string>;
+      }>
+    >;
     restoreBackup(args: {
       site: any;
       provider: 'dropbox' | 'googleDrive';
@@ -274,6 +280,12 @@ export interface LocalServices {
   };
   // UserData for reading cloud storage accounts
   userData?: {
-    get(opts: { name: string; defaults: any; includeCreatedTime?: boolean; persistDefaults?: boolean; persistDefaultsEncrypted?: boolean }): any;
+    get(opts: {
+      name: string;
+      defaults: any;
+      includeCreatedTime?: boolean;
+      persistDefaults?: boolean;
+      persistDefaultsEncrypted?: boolean;
+    }): any;
   };
 }

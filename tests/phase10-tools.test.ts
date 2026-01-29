@@ -3,9 +3,8 @@
  * Tests for Cloud Backup tools
  */
 
-// Read the tool definitions from mcp-stdio.js
-const fs = require('fs');
-const path = require('path');
+import * as fs from 'fs';
+import * as path from 'path';
 
 // Extract tool definitions from the stdio script
 function getToolDefinitions() {

@@ -3,8 +3,8 @@
  * Tests for WP Engine Connect/Sync tools
  */
 
-const fs = require('fs');
-const path = require('path');
+import * as fs from 'fs';
+import * as path from 'path';
 
 describe('Phase 11 WP Engine Connect Tools', () => {
   const scriptPath = path.join(__dirname, '..', 'bin', 'mcp-stdio.js');

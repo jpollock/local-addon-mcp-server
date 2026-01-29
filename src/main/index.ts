@@ -736,11 +736,7 @@ const typeDefs = gql`
   extend type Mutation {
     # Phase 10: Cloud Backups
     "Create a backup of a site to cloud storage"
-    createBackup(
-      siteId: ID!
-      provider: String!
-      note: String
-    ): CreateBackupResult!
+    createBackup(siteId: ID!, provider: String!, note: String): CreateBackupResult!
 
     "Restore a site from a cloud backup"
     restoreBackup(
@@ -759,11 +755,7 @@ const typeDefs = gql`
     ): DeleteBackupResult!
 
     "Download a backup as a ZIP file"
-    downloadBackup(
-      siteId: ID!
-      provider: String!
-      snapshotId: String!
-    ): DownloadBackupResult!
+    downloadBackup(siteId: ID!, provider: String!, snapshotId: String!): DownloadBackupResult!
 
     "Update the note/description for a backup"
     editBackupNote(
@@ -790,11 +782,7 @@ const typeDefs = gql`
     ): SyncResult!
 
     "Pull from WP Engine to local site"
-    pullFromWpe(
-      localSiteId: ID!
-      remoteInstallId: ID!
-      includeSql: Boolean = false
-    ): SyncResult!
+    pullFromWpe(localSiteId: ID!, remoteInstallId: ID!, includeSql: Boolean = false): SyncResult!
   }
 `;
 
@@ -868,8 +856,8 @@ function createResolvers(services: any) {
         sender: {
           send: (replyChannel: string, data: any) => {
             ipcMain.emit(replyChannel, null, data);
-          }
-        }
+          },
+        },
       };
 
       const replyChannels = { successReplyChannel, errorReplyChannel };
@@ -885,7 +873,9 @@ function createResolvers(services: any) {
       localLogger.info(`[${ADDON_NAME}] Raw IPC result: ${JSON.stringify(result)}`);
 
       if (result.error) {
-        localLogger.error(`[${ADDON_NAME}] Failed to get backup providers: ${result.error.message}`);
+        localLogger.error(
+          `[${ADDON_NAME}] Failed to get backup providers: ${result.error.message}`
+        );
         return [];
       }
 
@@ -910,7 +900,9 @@ function createResolvers(services: any) {
         return providers;
       }
 
-      localLogger.warn(`[${ADDON_NAME}] Unexpected providers format after unwrapping: ${typeof providers}`);
+      localLogger.warn(
+        `[${ADDON_NAME}] Unexpected providers format after unwrapping: ${typeof providers}`
+      );
       return [];
     } catch (error: any) {
       localLogger.error(`[${ADDON_NAME}] Error getting backup providers: ${error.message}`);
@@ -1230,60 +1222,75 @@ function createResolvers(services: any) {
               siteName: site.name,
               connections: [],
               connectionCount: 0,
-              message: 'Site is not linked to any WP Engine environment. Use Connect in Local to pull a site from WPE.',
+              message:
+                'Site is not linked to any WP Engine environment. Use Connect in Local to pull a site from WPE.',
               error: null,
             };
           }
 
           // Transform connections for output, enriching with CAPI data if available
-          const connections = await Promise.all(wpeConnections.map(async (c: any) => {
-            let installName = c.remoteSiteId; // Default to UUID
-            let portalUrl = null;
-            let primaryDomain = null;
+          const connections = await Promise.all(
+            wpeConnections.map(async (c: any) => {
+              let installName = c.remoteSiteId; // Default to UUID
+              let portalUrl = null;
+              let primaryDomain = null;
 
-            // Try to get install details from CAPI to get the actual name
-            // remoteSiteId matches install.site.id (WPE Site ID), not install.id
-            if (capiService && typeof capiService.getInstallList === 'function') {
-              try {
-                localLogger.info(`[${ADDON_NAME}] Looking for install with site.id=${c.remoteSiteId}, env=${c.remoteSiteEnv}`);
-                const installs = await capiService.getInstallList();
-                localLogger.info(`[${ADDON_NAME}] Got ${installs?.length || 0} installs from CAPI`);
-                if (installs && installs.length > 0) {
-                  // Log first install structure for debugging
-                  localLogger.info(`[${ADDON_NAME}] Sample install structure: ${JSON.stringify(installs[0], null, 2)}`);
-
-                  // Match by site.id (remoteSiteId is the WPE Site ID, not Install ID)
-                  // Also filter by environment if available
-                  const matchingInstall = installs.find((i: any) =>
-                    i.site?.id === c.remoteSiteId &&
-                    (!c.remoteSiteEnv || i.environment === c.remoteSiteEnv)
+              // Try to get install details from CAPI to get the actual name
+              // remoteSiteId matches install.site.id (WPE Site ID), not install.id
+              if (capiService && typeof capiService.getInstallList === 'function') {
+                try {
+                  localLogger.info(
+                    `[${ADDON_NAME}] Looking for install with site.id=${c.remoteSiteId}, env=${c.remoteSiteEnv}`
                   );
+                  const installs = await capiService.getInstallList();
+                  localLogger.info(
+                    `[${ADDON_NAME}] Got ${installs?.length || 0} installs from CAPI`
+                  );
+                  if (installs && installs.length > 0) {
+                    // Log first install structure for debugging
+                    localLogger.info(
+                      `[${ADDON_NAME}] Sample install structure: ${JSON.stringify(installs[0], null, 2)}`
+                    );
 
-                  if (matchingInstall) {
-                    localLogger.info(`[${ADDON_NAME}] Found match: ${matchingInstall.name}`);
-                    installName = matchingInstall.name;
-                    portalUrl = `https://my.wpengine.com/installs/${matchingInstall.name}`;
-                    primaryDomain = matchingInstall.primary_domain || matchingInstall.cname || null;
-                  } else {
-                    localLogger.warn(`[${ADDON_NAME}] No matching install found for site.id=${c.remoteSiteId}`);
+                    // Match by site.id (remoteSiteId is the WPE Site ID, not Install ID)
+                    // Also filter by environment if available
+                    const matchingInstall = installs.find(
+                      (i: any) =>
+                        i.site?.id === c.remoteSiteId &&
+                        (!c.remoteSiteEnv || i.environment === c.remoteSiteEnv)
+                    );
+
+                    if (matchingInstall) {
+                      localLogger.info(`[${ADDON_NAME}] Found match: ${matchingInstall.name}`);
+                      installName = matchingInstall.name;
+                      portalUrl = `https://my.wpengine.com/installs/${matchingInstall.name}`;
+                      primaryDomain =
+                        matchingInstall.primary_domain || matchingInstall.cname || null;
+                    } else {
+                      localLogger.warn(
+                        `[${ADDON_NAME}] No matching install found for site.id=${c.remoteSiteId}`
+                      );
+                    }
                   }
+                } catch (e: any) {
+                  localLogger.warn(
+                    `[${ADDON_NAME}] Could not look up install from CAPI: ${e.message}`
+                  );
                 }
-              } catch (e: any) {
-                localLogger.warn(`[${ADDON_NAME}] Could not look up install from CAPI: ${e.message}`);
+              } else {
+                localLogger.warn(`[${ADDON_NAME}] capiService or getInstallList not available`);
               }
-            } else {
-              localLogger.warn(`[${ADDON_NAME}] capiService or getInstallList not available`);
-            }
 
-            return {
-              remoteInstallId: c.remoteSiteId,
-              installName,
-              environment: c.remoteSiteEnv || null,
-              accountId: c.accountId || null,
-              portalUrl,
-              primaryDomain,
-            };
-          }));
+              return {
+                remoteInstallId: c.remoteSiteId,
+                installName,
+                environment: c.remoteSiteEnv || null,
+                accountId: c.accountId || null,
+                portalUrl,
+                primaryDomain,
+              };
+            })
+          );
 
           // Capabilities are always the same for WPE-connected sites
           const capabilities = {
@@ -1331,22 +1338,43 @@ function createResolvers(services: any) {
               featureEnabled: false,
               dropbox: null,
               googleDrive: null,
-              message: 'No cloud storage providers configured. Connect Google Drive or Dropbox in Local Hub (hub.localwp.com/addons/cloud-backups).',
+              message:
+                'No cloud storage providers configured. Connect Google Drive or Dropbox in Local Hub (hub.localwp.com/addons/cloud-backups).',
               error: null,
             };
           }
 
           // Map provider info to our response format
-          const dropboxProvider = providers.find((p: any) => p.id === 'dropbox' || p.name?.toLowerCase().includes('dropbox')) as any;
-          const googleProvider = providers.find((p: any) => p.id === 'google' || p.name?.toLowerCase().includes('google')) as any;
+          const dropboxProvider = providers.find(
+            (p: any) => p.id === 'dropbox' || p.name?.toLowerCase().includes('dropbox')
+          ) as any;
+          const googleProvider = providers.find(
+            (p: any) => p.id === 'google' || p.name?.toLowerCase().includes('google')
+          ) as any;
 
           const dropboxStatus = dropboxProvider
-            ? { authenticated: true, accountId: dropboxProvider.id, email: dropboxProvider.email || null }
-            : { authenticated: false, accountId: null as string | null, email: null as string | null };
+            ? {
+                authenticated: true,
+                accountId: dropboxProvider.id,
+                email: dropboxProvider.email || null,
+              }
+            : {
+                authenticated: false,
+                accountId: null as string | null,
+                email: null as string | null,
+              };
 
           const googleDriveStatus = googleProvider
-            ? { authenticated: true, accountId: googleProvider.id, email: googleProvider.email || null }
-            : { authenticated: false, accountId: null as string | null, email: null as string | null };
+            ? {
+                authenticated: true,
+                accountId: googleProvider.id,
+                email: googleProvider.email || null,
+              }
+            : {
+                authenticated: false,
+                accountId: null as string | null,
+                email: null as string | null,
+              };
 
           const hasProvider = providers.length > 0;
 
@@ -1355,7 +1383,9 @@ function createResolvers(services: any) {
             featureEnabled: true,
             dropbox: dropboxStatus,
             googleDrive: googleDriveStatus,
-            message: hasProvider ? null : 'No cloud storage provider authenticated. Connect Dropbox or Google Drive in Local settings.',
+            message: hasProvider
+              ? null
+              : 'No cloud storage provider authenticated. Connect Dropbox or Google Drive in Local settings.',
             error: null,
           };
         } catch (error: any) {
@@ -1399,7 +1429,8 @@ function createResolvers(services: any) {
               provider,
               backups: [],
               count: 0,
-              error: 'No cloud storage providers configured. Connect Google Drive or Dropbox in Local Hub.',
+              error:
+                'No cloud storage providers configured. Connect Google Drive or Dropbox in Local Hub.',
             };
           }
 
@@ -1422,8 +1453,15 @@ function createResolvers(services: any) {
           // For listing snapshots, use the Hub provider ID directly (e.g., 'google')
           // NOT the rclone backend name ('drive') - the Hub queries expect the OAuth provider name
           // Also pass pageOffset parameter (0 for first page)
-          const result = await invokeBackupIPC('backups:provider-snapshots', siteId, matchedProvider.id, 0);
-          localLogger.info(`[${ADDON_NAME}] Provider snapshots raw result: ${JSON.stringify(result)}`);
+          const result = await invokeBackupIPC(
+            'backups:provider-snapshots',
+            siteId,
+            matchedProvider.id,
+            0
+          );
+          localLogger.info(
+            `[${ADDON_NAME}] Provider snapshots raw result: ${JSON.stringify(result)}`
+          );
 
           if (result.error) {
             return {
@@ -1461,8 +1499,11 @@ function createResolvers(services: any) {
               // The Hub ID (b.id) is just a database identifier
               snapshotId: b.hash || b.snapshotId || b.short_id,
               timestamp: b.updatedAt || b.createdAt || b.timestamp || b.time || b.created,
-              note: b.configObject?.description || b.note || b.description || b.tags?.description || '',
-              siteDomain: b.configObject?.name ? `${b.configObject.name}.local` : (b.siteDomain || site.domain),
+              note:
+                b.configObject?.description || b.note || b.description || b.tags?.description || '',
+              siteDomain: b.configObject?.name
+                ? `${b.configObject.name}.local`
+                : b.siteDomain || site.domain,
               services: JSON.stringify(b.configObject?.services || b.services || {}),
             })),
             count: backups.length,
@@ -1544,7 +1585,9 @@ function createResolvers(services: any) {
         const { siteId, direction = 'push' } = args;
 
         try {
-          localLogger.info(`[${ADDON_NAME}] Getting site changes for ${siteId}, direction=${direction}`);
+          localLogger.info(
+            `[${ADDON_NAME}] Getting site changes for ${siteId}, direction=${direction}`
+          );
 
           // Validate direction
           if (direction !== 'push' && direction !== 'pull') {
@@ -1589,12 +1632,16 @@ function createResolvers(services: any) {
               deleted: [],
               totalChanges: 0,
               message: null,
-              error: 'Site is not linked to WP Engine. Use Connect in Local to link the site first.',
+              error:
+                'Site is not linked to WP Engine. Use Connect in Local to link the site first.',
             };
           }
 
           // Check service availability
-          if (!wpeConnectBaseService || typeof wpeConnectBaseService.listModifications !== 'function') {
+          if (
+            !wpeConnectBaseService ||
+            typeof wpeConnectBaseService.listModifications !== 'function'
+          ) {
             return {
               success: false,
               siteName: site.name,
@@ -1615,13 +1662,17 @@ function createResolvers(services: any) {
 
           if (capiService && typeof capiService.getInstallList === 'function') {
             const installs = await capiService.getInstallList();
-            const matchingInstall = installs?.find((i: any) =>
-              i.site?.id === wpeConnection.remoteSiteId &&
-              (!wpeConnection.remoteSiteEnv || i.environment === wpeConnection.remoteSiteEnv)
+            const matchingInstall = installs?.find(
+              (i: any) =>
+                i.site?.id === wpeConnection.remoteSiteId &&
+                (!wpeConnection.remoteSiteEnv || i.environment === wpeConnection.remoteSiteEnv)
             );
             if (matchingInstall) {
               installName = matchingInstall.name;
-              primaryDomain = matchingInstall.primary_domain || matchingInstall.cname || `${matchingInstall.name}.wpengine.com`;
+              primaryDomain =
+                matchingInstall.primary_domain ||
+                matchingInstall.cname ||
+                `${matchingInstall.name}.wpengine.com`;
               installId = matchingInstall.id;
             }
           }
@@ -1636,7 +1687,8 @@ function createResolvers(services: any) {
               deleted: [],
               totalChanges: 0,
               message: null,
-              error: 'Could not determine WP Engine install details. Please ensure you are authenticated.',
+              error:
+                'Could not determine WP Engine install details. Please ensure you are authenticated.',
             };
           }
 
@@ -1655,32 +1707,37 @@ function createResolvers(services: any) {
           });
 
           // Categorize changes
-          const added = modifications.filter((f: any) =>
-            f.instruction === 'create' || f.instruction === 'upload' || f.instruction === 'download'
-          ).map((f: any) => ({
-            path: f.path,
-            instruction: f.instruction,
-            size: f.size,
-            type: f.type,
-          }));
+          const added = modifications
+            .filter(
+              (f: any) =>
+                f.instruction === 'create' ||
+                f.instruction === 'upload' ||
+                f.instruction === 'download'
+            )
+            .map((f: any) => ({
+              path: f.path,
+              instruction: f.instruction,
+              size: f.size,
+              type: f.type,
+            }));
 
-          const modified = modifications.filter((f: any) =>
-            f.instruction === 'modify'
-          ).map((f: any) => ({
-            path: f.path,
-            instruction: f.instruction,
-            size: f.size,
-            type: f.type,
-          }));
+          const modified = modifications
+            .filter((f: any) => f.instruction === 'modify')
+            .map((f: any) => ({
+              path: f.path,
+              instruction: f.instruction,
+              size: f.size,
+              type: f.type,
+            }));
 
-          const deleted = modifications.filter((f: any) =>
-            f.instruction === 'delete'
-          ).map((f: any) => ({
-            path: f.path,
-            instruction: f.instruction,
-            size: f.size,
-            type: f.type,
-          }));
+          const deleted = modifications
+            .filter((f: any) => f.instruction === 'delete')
+            .map((f: any) => ({
+              path: f.path,
+              instruction: f.instruction,
+              size: f.size,
+              type: f.type,
+            }));
 
           const totalChanges = added.length + modified.length + deleted.length;
           const directionLabel = direction === 'push' ? 'local → WPE' : 'WPE → local';
@@ -1693,9 +1750,10 @@ function createResolvers(services: any) {
             modified,
             deleted,
             totalChanges,
-            message: totalChanges > 0
-              ? `${totalChanges} file(s) changed (${directionLabel}): ${added.length} added, ${modified.length} modified, ${deleted.length} deleted`
-              : `No changes detected (${directionLabel})`,
+            message:
+              totalChanges > 0
+                ? `${totalChanges} file(s) changed (${directionLabel}): ${added.length} added, ${modified.length} modified, ${deleted.length} deleted`
+                : `No changes detected (${directionLabel})`,
             error: null,
           };
         } catch (error: any) {
@@ -2781,7 +2839,10 @@ function createResolvers(services: any) {
       },
 
       // Phase 10: Cloud Backup Mutations
-      createBackup: async (_parent: any, args: { siteId: string; provider: string; note?: string }) => {
+      createBackup: async (
+        _parent: any,
+        args: { siteId: string; provider: string; note?: string }
+      ) => {
         const { siteId, provider, note } = args;
 
         try {
@@ -2807,7 +2868,8 @@ function createResolvers(services: any) {
               snapshotId: null,
               timestamp: null,
               message: null,
-              error: 'No cloud storage providers configured. Connect Google Drive or Dropbox in Local Hub.',
+              error:
+                'No cloud storage providers configured. Connect Google Drive or Dropbox in Local Hub.',
             };
           }
 
@@ -2830,11 +2892,18 @@ function createResolvers(services: any) {
           // The addon uses 'google' in enabled-providers but expects 'drive' for backup operations
           const backupProviderMap: Record<string, string> = { google: 'drive', dropbox: 'dropbox' };
           const backupProviderId = backupProviderMap[matchedProvider.id] || matchedProvider.id;
-          localLogger.info(`[${ADDON_NAME}] Using backup provider ID: ${backupProviderId} (from ${matchedProvider.id})`);
+          localLogger.info(
+            `[${ADDON_NAME}] Using backup provider ID: ${backupProviderId} (from ${matchedProvider.id})`
+          );
 
           // Create backup via IPC
           const description = note || 'Backup created via MCP';
-          const result = await invokeBackupIPC('backups:backup-site', siteId, backupProviderId, description);
+          const result = await invokeBackupIPC(
+            'backups:backup-site',
+            siteId,
+            backupProviderId,
+            description
+          );
           localLogger.info(`[${ADDON_NAME}] Backup IPC result: ${JSON.stringify(result)}`);
 
           // Check for top-level IPC error
@@ -2853,7 +2922,8 @@ function createResolvers(services: any) {
 
           // Check if the backup result contains an error (nested at result.result.error)
           if (backupResult?.error) {
-            const errorMsg = backupResult.error.message || backupResult.error.original?.message || 'Backup failed';
+            const errorMsg =
+              backupResult.error.message || backupResult.error.original?.message || 'Backup failed';
             return {
               success: false,
               snapshotId: null,
@@ -2890,7 +2960,10 @@ function createResolvers(services: any) {
         }
       },
 
-      restoreBackup: async (_parent: any, args: { siteId: string; provider: string; snapshotId: string; confirm?: boolean }) => {
+      restoreBackup: async (
+        _parent: any,
+        args: { siteId: string; provider: string; snapshotId: string; confirm?: boolean }
+      ) => {
         const { siteId, provider, snapshotId, confirm = false } = args;
 
         try {
@@ -2901,7 +2974,8 @@ function createResolvers(services: any) {
             return {
               success: false,
               message: null,
-              error: 'Restore requires confirm=true to prevent accidental data loss. Current site files and database will be overwritten.',
+              error:
+                'Restore requires confirm=true to prevent accidental data loss. Current site files and database will be overwritten.',
             };
           }
 
@@ -2921,7 +2995,8 @@ function createResolvers(services: any) {
             return {
               success: false,
               message: null,
-              error: 'No cloud storage providers configured. Connect Google Drive or Dropbox in Local Hub.',
+              error:
+                'No cloud storage providers configured. Connect Google Drive or Dropbox in Local Hub.',
             };
           }
 
@@ -2943,13 +3018,19 @@ function createResolvers(services: any) {
           const backupProviderId = backupProviderMap[matchedProvider.id] || matchedProvider.id;
 
           // Restore backup via IPC
-          const result = await invokeBackupIPC('backups:restore-backup', siteId, backupProviderId, snapshotId);
+          const result = await invokeBackupIPC(
+            'backups:restore-backup',
+            siteId,
+            backupProviderId,
+            snapshotId
+          );
           localLogger.info(`[${ADDON_NAME}] Restore result: ${JSON.stringify(result)}`);
 
           // Check for errors - can be at result.error or result.result.error (IPC async pattern)
           const ipcError = result.error || result.result?.error;
           if (ipcError) {
-            const errorMessage = typeof ipcError === 'string' ? ipcError : (ipcError.message || 'Restore failed');
+            const errorMessage =
+              typeof ipcError === 'string' ? ipcError : ipcError.message || 'Restore failed';
             return {
               success: false,
               message: null,
@@ -2972,7 +3053,10 @@ function createResolvers(services: any) {
         }
       },
 
-      deleteBackup: async (_parent: any, args: { siteId: string; provider: string; snapshotId: string; confirm?: boolean }) => {
+      deleteBackup: async (
+        _parent: any,
+        args: { siteId: string; provider: string; snapshotId: string; confirm?: boolean }
+      ) => {
         const { siteId, provider, snapshotId, confirm = false } = args;
 
         try {
@@ -3006,7 +3090,8 @@ function createResolvers(services: any) {
               success: false,
               deletedSnapshotId: null,
               message: null,
-              error: 'No cloud storage providers configured. Connect Google Drive or Dropbox in Local Hub.',
+              error:
+                'No cloud storage providers configured. Connect Google Drive or Dropbox in Local Hub.',
             };
           }
 
@@ -3029,7 +3114,12 @@ function createResolvers(services: any) {
           const backupProviderId = backupProviderMap[matchedProvider.id] || matchedProvider.id;
 
           // Try to delete backup via IPC (may not be supported by the addon)
-          const result = await invokeBackupIPC('backups:delete-backup', siteId, backupProviderId, snapshotId);
+          const result = await invokeBackupIPC(
+            'backups:delete-backup',
+            siteId,
+            backupProviderId,
+            snapshotId
+          );
 
           if (result.error) {
             // If the IPC channel doesn't exist or isn't supported, provide helpful message
@@ -3038,7 +3128,8 @@ function createResolvers(services: any) {
                 success: false,
                 deletedSnapshotId: null,
                 message: null,
-                error: 'Delete backup operation is not available via MCP. Please delete backups through the Local UI.',
+                error:
+                  'Delete backup operation is not available via MCP. Please delete backups through the Local UI.',
               };
             }
             return {
@@ -3066,7 +3157,10 @@ function createResolvers(services: any) {
         }
       },
 
-      downloadBackup: async (_parent: any, args: { siteId: string; provider: string; snapshotId: string }) => {
+      downloadBackup: async (
+        _parent: any,
+        args: { siteId: string; provider: string; snapshotId: string }
+      ) => {
         const { siteId, provider, snapshotId } = args;
 
         try {
@@ -3090,7 +3184,8 @@ function createResolvers(services: any) {
               success: false,
               filePath: null,
               message: null,
-              error: 'No cloud storage providers configured. Connect Google Drive or Dropbox in Local Hub.',
+              error:
+                'No cloud storage providers configured. Connect Google Drive or Dropbox in Local Hub.',
             };
           }
 
@@ -3113,7 +3208,12 @@ function createResolvers(services: any) {
           const backupProviderId = backupProviderMap[matchedProvider.id] || matchedProvider.id;
 
           // Try to download backup via IPC (may not be supported by the addon)
-          const result = await invokeBackupIPC('backups:download-backup', siteId, backupProviderId, snapshotId);
+          const result = await invokeBackupIPC(
+            'backups:download-backup',
+            siteId,
+            backupProviderId,
+            snapshotId
+          );
 
           if (result.error) {
             // If the IPC channel doesn't exist or isn't supported, provide helpful message
@@ -3122,7 +3222,8 @@ function createResolvers(services: any) {
                 success: false,
                 filePath: null,
                 message: null,
-                error: 'Download backup operation is not available via MCP. Please download backups through the Local UI.',
+                error:
+                  'Download backup operation is not available via MCP. Please download backups through the Local UI.',
               };
             }
             return {
@@ -3150,7 +3251,10 @@ function createResolvers(services: any) {
         }
       },
 
-      editBackupNote: async (_parent: any, args: { siteId: string; provider: string; snapshotId: string; note: string }) => {
+      editBackupNote: async (
+        _parent: any,
+        args: { siteId: string; provider: string; snapshotId: string; note: string }
+      ) => {
         const { siteId, provider, snapshotId, note } = args;
 
         try {
@@ -3174,7 +3278,8 @@ function createResolvers(services: any) {
               success: false,
               snapshotId: null,
               note: null,
-              error: 'No cloud storage providers configured. Connect Google Drive or Dropbox in Local Hub.',
+              error:
+                'No cloud storage providers configured. Connect Google Drive or Dropbox in Local Hub.',
             };
           }
 
@@ -3197,7 +3302,13 @@ function createResolvers(services: any) {
           const backupProviderId = backupProviderMap[matchedProvider.id] || matchedProvider.id;
 
           // Try to edit backup note via IPC (may not be supported by the addon)
-          const result = await invokeBackupIPC('backups:edit-note', siteId, backupProviderId, snapshotId, note);
+          const result = await invokeBackupIPC(
+            'backups:edit-note',
+            siteId,
+            backupProviderId,
+            snapshotId,
+            note
+          );
 
           if (result.error) {
             // If the IPC channel doesn't exist or isn't supported, provide helpful message
@@ -3206,7 +3317,8 @@ function createResolvers(services: any) {
                 success: false,
                 snapshotId: null,
                 note: null,
-                error: 'Edit backup note operation is not available via MCP. Please edit backup notes through the Local UI.',
+                error:
+                  'Edit backup note operation is not available via MCP. Please edit backup notes through the Local UI.',
               };
             }
             return {
@@ -3324,23 +3436,29 @@ function createResolvers(services: any) {
       },
 
       // Phase 11c: Push to WP Engine
-      pushToWpe: async (_parent: any, args: {
-        localSiteId: string;
-        remoteInstallId: string;
-        includeSql?: boolean;
-        confirm?: boolean;
-      }) => {
+      pushToWpe: async (
+        _parent: any,
+        args: {
+          localSiteId: string;
+          remoteInstallId: string;
+          includeSql?: boolean;
+          confirm?: boolean;
+        }
+      ) => {
         const { localSiteId, remoteInstallId, includeSql = false, confirm = false } = args;
 
         try {
-          localLogger.info(`[${ADDON_NAME}] Push to WPE: site=${localSiteId}, remote=${remoteInstallId}, includeSql=${includeSql}`);
+          localLogger.info(
+            `[${ADDON_NAME}] Push to WPE: site=${localSiteId}, remote=${remoteInstallId}, includeSql=${includeSql}`
+          );
 
           // Require confirmation for push operations
           if (!confirm) {
             return {
               success: false,
               message: null,
-              error: 'Push requires confirm=true to prevent accidental overwrites. Set confirm=true to proceed.',
+              error:
+                'Push requires confirm=true to prevent accidental overwrites. Set confirm=true to proceed.',
             };
           }
 
@@ -3360,7 +3478,8 @@ function createResolvers(services: any) {
             return {
               success: false,
               message: null,
-              error: 'Site is not linked to WP Engine. Use Connect in Local to link the site first.',
+              error:
+                'Site is not linked to WP Engine. Use Connect in Local to link the site first.',
             };
           }
 
@@ -3380,13 +3499,17 @@ function createResolvers(services: any) {
 
           if (capiService && typeof capiService.getInstallList === 'function') {
             const installs = await capiService.getInstallList();
-            const matchingInstall = installs?.find((i: any) =>
-              i.site?.id === wpeConnection.remoteSiteId &&
-              (!wpeConnection.remoteSiteEnv || i.environment === wpeConnection.remoteSiteEnv)
+            const matchingInstall = installs?.find(
+              (i: any) =>
+                i.site?.id === wpeConnection.remoteSiteId &&
+                (!wpeConnection.remoteSiteEnv || i.environment === wpeConnection.remoteSiteEnv)
             );
             if (matchingInstall) {
               installName = matchingInstall.name;
-              primaryDomain = matchingInstall.primary_domain || matchingInstall.cname || `${matchingInstall.name}.wpengine.com`;
+              primaryDomain =
+                matchingInstall.primary_domain ||
+                matchingInstall.cname ||
+                `${matchingInstall.name}.wpengine.com`;
               installId = matchingInstall.id;
             }
           }
@@ -3395,23 +3518,26 @@ function createResolvers(services: any) {
             return {
               success: false,
               message: null,
-              error: 'Could not determine WP Engine install details. Please ensure you are authenticated.',
+              error:
+                'Could not determine WP Engine install details. Please ensure you are authenticated.',
             };
           }
 
           // Start the push operation (async - returns immediately)
-          wpePushService.push({
-            includeSql,
-            wpengineInstallName: installName,
-            wpengineInstallId: installId,
-            wpengineSiteId: wpeConnection.remoteSiteId,
-            wpenginePrimaryDomain: primaryDomain,
-            localSiteId: site.id,
-            environment: wpeConnection.remoteSiteEnv,
-            isMagicSync: false,
-          }).catch((err: any) => {
-            localLogger.error(`[${ADDON_NAME}] Push failed:`, err);
-          });
+          wpePushService
+            .push({
+              includeSql,
+              wpengineInstallName: installName,
+              wpengineInstallId: installId,
+              wpengineSiteId: wpeConnection.remoteSiteId,
+              wpenginePrimaryDomain: primaryDomain,
+              localSiteId: site.id,
+              environment: wpeConnection.remoteSiteEnv,
+              isMagicSync: false,
+            })
+            .catch((err: any) => {
+              localLogger.error(`[${ADDON_NAME}] Push failed:`, err);
+            });
 
           return {
             success: true,
@@ -3429,15 +3555,20 @@ function createResolvers(services: any) {
       },
 
       // Phase 11c: Pull from WP Engine
-      pullFromWpe: async (_parent: any, args: {
-        localSiteId: string;
-        remoteInstallId: string;
-        includeSql?: boolean;
-      }) => {
+      pullFromWpe: async (
+        _parent: any,
+        args: {
+          localSiteId: string;
+          remoteInstallId: string;
+          includeSql?: boolean;
+        }
+      ) => {
         const { localSiteId, remoteInstallId, includeSql = false } = args;
 
         try {
-          localLogger.info(`[${ADDON_NAME}] Pull from WPE: site=${localSiteId}, remote=${remoteInstallId}, includeSql=${includeSql}`);
+          localLogger.info(
+            `[${ADDON_NAME}] Pull from WPE: site=${localSiteId}, remote=${remoteInstallId}, includeSql=${includeSql}`
+          );
 
           // Verify site exists
           const site = siteData.getSite(localSiteId);
@@ -3455,7 +3586,8 @@ function createResolvers(services: any) {
             return {
               success: false,
               message: null,
-              error: 'Site is not linked to WP Engine. Use Connect in Local to link the site first.',
+              error:
+                'Site is not linked to WP Engine. Use Connect in Local to link the site first.',
             };
           }
 
@@ -3475,13 +3607,17 @@ function createResolvers(services: any) {
 
           if (capiService && typeof capiService.getInstallList === 'function') {
             const installs = await capiService.getInstallList();
-            const matchingInstall = installs?.find((i: any) =>
-              i.site?.id === wpeConnection.remoteSiteId &&
-              (!wpeConnection.remoteSiteEnv || i.environment === wpeConnection.remoteSiteEnv)
+            const matchingInstall = installs?.find(
+              (i: any) =>
+                i.site?.id === wpeConnection.remoteSiteId &&
+                (!wpeConnection.remoteSiteEnv || i.environment === wpeConnection.remoteSiteEnv)
             );
             if (matchingInstall) {
               installName = matchingInstall.name;
-              primaryDomain = matchingInstall.primary_domain || matchingInstall.cname || `${matchingInstall.name}.wpengine.com`;
+              primaryDomain =
+                matchingInstall.primary_domain ||
+                matchingInstall.cname ||
+                `${matchingInstall.name}.wpengine.com`;
               installId = matchingInstall.id;
             }
           }
@@ -3490,23 +3626,26 @@ function createResolvers(services: any) {
             return {
               success: false,
               message: null,
-              error: 'Could not determine WP Engine install details. Please ensure you are authenticated.',
+              error:
+                'Could not determine WP Engine install details. Please ensure you are authenticated.',
             };
           }
 
           // Start the pull operation (async - returns immediately)
-          wpePullService.pull({
-            includeSql,
-            wpengineInstallName: installName,
-            wpengineInstallId: installId,
-            wpengineSiteId: wpeConnection.remoteSiteId,
-            wpenginePrimaryDomain: primaryDomain,
-            localSiteId: site.id,
-            environment: wpeConnection.remoteSiteEnv,
-            isMagicSync: false,
-          }).catch((err: any) => {
-            localLogger.error(`[${ADDON_NAME}] Pull failed:`, err);
-          });
+          wpePullService
+            .pull({
+              includeSql,
+              wpengineInstallName: installName,
+              wpengineInstallId: installId,
+              wpengineSiteId: wpeConnection.remoteSiteId,
+              wpenginePrimaryDomain: primaryDomain,
+              localSiteId: site.id,
+              environment: wpeConnection.remoteSiteEnv,
+              isMagicSync: false,
+            })
+            .catch((err: any) => {
+              localLogger.error(`[${ADDON_NAME}] Pull failed:`, err);
+            });
 
           return {
             success: true,
