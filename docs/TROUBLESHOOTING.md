@@ -33,13 +33,29 @@ flowchart TD
 
 ## Quick Diagnostics
 
-### Check if MCP Server is Running
+### Check MCP Server Status in Preferences
+
+The easiest way to check the server status:
+
+1. Open **Local → Preferences → MCP Server**
+2. View the **Status & Controls** tab
+3. Check that the status shows "Running" with a green indicator
+
+From this panel you can also:
+
+- View the port number and uptime
+- Test the connection with the **Test Connection** button
+- See all available tools
+- Regenerate the auth token if needed
+
+### Check if MCP Server is Running (Command Line)
 
 ```bash
 curl http://127.0.0.1:10789/health
 ```
 
 **Expected response:**
+
 ```json
 {
   "status": "ok",
@@ -52,16 +68,19 @@ curl http://127.0.0.1:10789/health
 ### Check Connection Info File
 
 **macOS:**
+
 ```bash
 cat ~/Library/Application\ Support/Local/mcp-connection-info.json
 ```
 
 **Windows (PowerShell):**
+
 ```powershell
 Get-Content "$env:APPDATA\Local\mcp-connection-info.json"
 ```
 
 **Linux:**
+
 ```bash
 cat ~/.config/Local/mcp-connection-info.json
 ```
@@ -71,6 +90,7 @@ cat ~/.config/Local/mcp-connection-info.json
 ### Issue: Connection Refused
 
 **Symptoms:**
+
 - `curl: (7) Failed to connect to localhost port 10789`
 - AI tool reports "connection refused"
 
@@ -92,6 +112,7 @@ cat ~/.config/Local/mcp-connection-info.json
 ### Issue: 401 Unauthorized
 
 **Symptoms:**
+
 - `{"error":"Unauthorized: Invalid or missing authentication token"}`
 
 **Causes & Solutions:**
@@ -104,12 +125,15 @@ cat ~/.config/Local/mcp-connection-info.json
    - Tokens regenerate each time Local starts
 
 3. **Token expired or stale**
-   - Restart Local to get a fresh token
+   - Go to **Local → Preferences → MCP Server**
+   - Click **Regenerate Token** in the Security section
    - Update your AI tool configuration with the new token
+   - Alternatively, restart Local to get a fresh token
 
 ### Issue: 403 Forbidden
 
 **Symptoms:**
+
 - `{"error":"Forbidden: Only localhost connections allowed"}`
 
 **Causes & Solutions:**
@@ -121,6 +145,7 @@ cat ~/.config/Local/mcp-connection-info.json
 ### Issue: Site Not Found
 
 **Symptoms:**
+
 - `Site not found: "my-site". Available sites: site1, site2, ...`
 
 **Causes & Solutions:**
@@ -136,6 +161,7 @@ cat ~/.config/Local/mcp-connection-info.json
 ### Issue: Site Not Running
 
 **Symptoms:**
+
 - `Site "my-site" is not running. Start it first with the start_site tool.`
 
 **Causes & Solutions:**
@@ -147,6 +173,7 @@ cat ~/.config/Local/mcp-connection-info.json
 ### Issue: WP-CLI Command Failed
 
 **Symptoms:**
+
 - `WP-CLI error: ...`
 
 **Causes & Solutions:**
@@ -166,6 +193,7 @@ cat ~/.config/Local/mcp-connection-info.json
 ### Issue: WP-CLI Command Blocked
 
 **Symptoms:**
+
 - `Command 'eval' is blocked for security reasons. Use Local's terminal for shell access.`
 
 **Causes & Solutions:**
@@ -178,6 +206,7 @@ cat ~/.config/Local/mcp-connection-info.json
 ### Issue: Invalid Snapshot ID
 
 **Symptoms:**
+
 - `Error: Invalid snapshot ID format. Expected hex string (8-64 characters).`
 
 **Causes & Solutions:**
@@ -193,6 +222,7 @@ cat ~/.config/Local/mcp-connection-info.json
 ### Issue: Create Site Failed
 
 **Symptoms:**
+
 - `Failed to create site: ...`
 
 **Causes & Solutions:**
@@ -212,6 +242,7 @@ cat ~/.config/Local/mcp-connection-info.json
 ### Issue: Delete Site Failed
 
 **Symptoms:**
+
 - `Deletion not confirmed. You must set confirm=true to delete a site.`
 
 **Causes & Solutions:**
@@ -225,6 +256,7 @@ cat ~/.config/Local/mcp-connection-info.json
 ### Issue: Backup Status Shows Not Available
 
 **Symptoms:**
+
 - `backup_status` returns `featureEnabled: false`
 
 **Causes & Solutions:**
@@ -238,6 +270,7 @@ cat ~/.config/Local/mcp-connection-info.json
 ### Issue: List Backups Returns Empty
 
 **Symptoms:**
+
 - `list_backups` returns empty array
 
 **Causes & Solutions:**
@@ -252,6 +285,7 @@ cat ~/.config/Local/mcp-connection-info.json
 ### Issue: Restore Backup Failed
 
 **Symptoms:**
+
 - `Failed to restore backup: ...`
 
 **Causes & Solutions:**
@@ -270,6 +304,7 @@ cat ~/.config/Local/mcp-connection-info.json
 ### Issue: WPE Status Shows Not Authenticated
 
 **Symptoms:**
+
 - `wpe_status` returns `authenticated: false`
 
 **Causes & Solutions:**
@@ -284,6 +319,7 @@ cat ~/.config/Local/mcp-connection-info.json
 ### Issue: Push/Pull Failed
 
 **Symptoms:**
+
 - `Push to WP Engine timed out after 300 seconds`
 - `Pull from WP Engine failed: ...`
 
@@ -303,6 +339,7 @@ cat ~/.config/Local/mcp-connection-info.json
 ### Issue: No WPE Sites Listed
 
 **Symptoms:**
+
 - `list_wpe_sites` returns empty array
 
 **Causes & Solutions:**
@@ -319,6 +356,7 @@ cat ~/.config/Local/mcp-connection-info.json
 Local's logs can help diagnose issues:
 
 **macOS:**
+
 ```bash
 # View recent Local logs
 tail -100 ~/Library/Logs/Local/local.log 2>/dev/null || echo "Check Local's log location"

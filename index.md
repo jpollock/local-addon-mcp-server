@@ -39,15 +39,32 @@ The [Model Context Protocol](https://modelcontextprotocol.io/) is an open standa
 3. Click **Install from disk** and select the downloaded `.tgz` file
 4. Toggle the addon **ON** and click **Relaunch**
 
+### Using the Preferences Panel
+
+After installation, access the MCP Server settings via **Local → Preferences → MCP Server**.
+
+![MCP Server Preferences](assets/mcp-preferences.png)
+
+The panel has two tabs:
+
+- **Status & Controls** - View server status, start/stop/restart, test connection, regenerate auth token
+- **AI Tool Setup** - Copy-ready configurations for Claude Code and other AI tools
+
 ### Configure Claude Code
 
-Add to your Claude Code MCP settings:
+From the **AI Tool Setup** tab, click **Copy Config** to get the configuration.
+
+![AI Tool Setup](assets/mcp-ai-tool-setup.png)
+
+Or manually add to your `~/.claude.json`:
 
 ```json
 {
   "mcpServers": {
     "local": {
-      "command": "/path/to/Local.app/Contents/Resources/extraResources/bin/local-mcp"
+      "type": "stdio",
+      "command": "node",
+      "args": ["/path/to/local-addon-mcp-server/bin/mcp-stdio.js"]
     }
   }
 }
@@ -63,73 +80,73 @@ Add to your Claude Code MCP settings:
 
 ### Site Management
 
-| Tool | Description |
-|------|-------------|
-| `list_sites` | List all WordPress sites |
-| `get_site` | Get detailed site information |
-| `start_site` | Start a site's services |
-| `stop_site` | Stop a site's services |
-| `restart_site` | Restart a site's services |
-| `create_site` | Create a new WordPress site |
-| `delete_site` | Delete a site |
-| `clone_site` | Clone an existing site |
-| `rename_site` | Rename a site |
-| `open_site` | Open site in browser |
+| Tool           | Description                   |
+| -------------- | ----------------------------- |
+| `list_sites`   | List all WordPress sites      |
+| `get_site`     | Get detailed site information |
+| `start_site`   | Start a site's services       |
+| `stop_site`    | Stop a site's services        |
+| `restart_site` | Restart a site's services     |
+| `create_site`  | Create a new WordPress site   |
+| `delete_site`  | Delete a site                 |
+| `clone_site`   | Clone an existing site        |
+| `rename_site`  | Rename a site                 |
+| `open_site`    | Open site in browser          |
 
 ### Import/Export
 
-| Tool | Description |
-|------|-------------|
-| `export_site` | Export site to a zip file |
-| `import_site` | Import site from a zip file |
-| `export_database` | Export database to SQL file |
+| Tool              | Description                   |
+| ----------------- | ----------------------------- |
+| `export_site`     | Export site to a zip file     |
+| `import_site`     | Import site from a zip file   |
+| `export_database` | Export database to SQL file   |
 | `import_database` | Import SQL file into database |
 
 ### Development Tools
 
-| Tool | Description |
-|------|-------------|
-| `wp_cli` | Run WP-CLI commands |
-| `open_adminer` | Open Adminer database UI |
-| `change_php_version` | Change site PHP version |
-| `trust_ssl` | Trust site SSL certificate |
-| `toggle_xdebug` | Enable/disable Xdebug |
-| `get_site_logs` | Get PHP/Nginx/MySQL logs |
-| `list_services` | List available service versions |
+| Tool                 | Description                     |
+| -------------------- | ------------------------------- |
+| `wp_cli`             | Run WP-CLI commands             |
+| `open_adminer`       | Open Adminer database UI        |
+| `change_php_version` | Change site PHP version         |
+| `trust_ssl`          | Trust site SSL certificate      |
+| `toggle_xdebug`      | Enable/disable Xdebug           |
+| `get_site_logs`      | Get PHP/Nginx/MySQL logs        |
+| `list_services`      | List available service versions |
 
 ### Blueprints & System
 
-| Tool | Description |
-|------|-------------|
-| `list_blueprints` | List available blueprints |
-| `save_blueprint` | Save site as blueprint |
-| `get_local_info` | Get Local application info |
+| Tool              | Description                |
+| ----------------- | -------------------------- |
+| `list_blueprints` | List available blueprints  |
+| `save_blueprint`  | Save site as blueprint     |
+| `get_local_info`  | Get Local application info |
 
 ### Cloud Backups
 
-| Tool | Description |
-|------|-------------|
-| `backup_status` | Check cloud backup availability |
-| `list_backups` | List backups from Dropbox/Google Drive |
-| `create_backup` | Create backup to cloud storage |
-| `restore_backup` | Restore from cloud backup |
-| `delete_backup` | Delete a cloud backup |
-| `download_backup` | Download backup as ZIP |
-| `edit_backup_note` | Update backup description |
+| Tool               | Description                            |
+| ------------------ | -------------------------------------- |
+| `backup_status`    | Check cloud backup availability        |
+| `list_backups`     | List backups from Dropbox/Google Drive |
+| `create_backup`    | Create backup to cloud storage         |
+| `restore_backup`   | Restore from cloud backup              |
+| `delete_backup`    | Delete a cloud backup                  |
+| `download_backup`  | Download backup as ZIP                 |
+| `edit_backup_note` | Update backup description              |
 
 ### WP Engine Connect
 
-| Tool | Description |
-|------|-------------|
-| `wpe_status` | Check WP Engine auth status |
-| `wpe_authenticate` | Start OAuth authentication |
-| `wpe_logout` | Clear WP Engine tokens |
-| `list_wpe_sites` | List WP Engine sites |
-| `get_wpe_link` | Get site's WPE connection info |
-| `push_to_wpe` | Push local changes to WPE |
-| `pull_from_wpe` | Pull changes from WPE |
-| `get_sync_history` | Get push/pull history |
-| `get_site_changes` | Preview file changes |
+| Tool               | Description                    |
+| ------------------ | ------------------------------ |
+| `wpe_status`       | Check WP Engine auth status    |
+| `wpe_authenticate` | Start OAuth authentication     |
+| `wpe_logout`       | Clear WP Engine tokens         |
+| `list_wpe_sites`   | List WP Engine sites           |
+| `get_wpe_link`     | Get site's WPE connection info |
+| `push_to_wpe`      | Push local changes to WPE      |
+| `pull_from_wpe`    | Pull changes from WPE          |
+| `get_sync_history` | Get push/pull history          |
+| `get_site_changes` | Preview file changes           |
 
 ## Requirements
 
