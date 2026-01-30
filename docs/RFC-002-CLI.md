@@ -188,6 +188,260 @@ local-addon-cli-mcp/
     └── package.json    # CLI package (separate for npm publishing)
 ```
 
+## Installation Experience
+
+### Zero-Friction Goal
+
+The ideal user experience is:
+
+```bash
+npm install -g @local-labs/local-cli
+lwp sites list
+```
+
+That's it. No manual addon download, no toggling switches in Local's UI, no restarts. The CLI handles everything automatically.
+
+### Installation Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    User runs: lwp sites list                     │
+└─────────────────────────────────────────────────────────────────┘
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │ Is Local installed? │
+                    └─────────────────────┘
+                       │              │
+                      No             Yes
+                       │              │
+                       ▼              ▼
+              ┌─────────────┐  ┌─────────────────────┐
+              │ Error with  │  │ Is addon installed? │
+              │ install URL │  └─────────────────────┘
+              └─────────────┘         │          │
+                                     No         Yes
+                                      │          │
+                                      ▼          ▼
+                           ┌──────────────┐  ┌─────────────────┐
+                           │ Auto-install │  │ Is addon active?│
+                           │ addon to     │  └─────────────────┘
+                           │ addons dir   │      │          │
+                           └──────────────┘     No         Yes
+                                  │              │          │
+                                  └──────┬───────┘          │
+                                         ▼                  │
+                              ┌─────────────────────┐       │
+                              │ Auto-activate addon │       │
+                              │ in enabled-addons   │       │
+                              └─────────────────────┘       │
+                                         │                  │
+                                         ▼                  │
+                              ┌─────────────────────┐       │
+                              │ Is Local running?   │       │
+                              └─────────────────────┘       │
+                                    │          │            │
+                                   No         Yes           │
+                                    │          │            │
+                                    ▼          ▼            │
+                          ┌──────────────┐  ┌─────────────┐ │
+                          │ Start Local  │  │ Restart     │ │
+                          │ (headless)   │  │ Local       │ │
+                          └──────────────┘  └─────────────┘ │
+                                    │          │            │
+                                    └────┬─────┘            │
+                                         ▼                  │
+                              ┌─────────────────────┐       │
+                              │ Wait for MCP server │◄──────┘
+                              │ to be ready         │
+                              └─────────────────────┘
+                                         │
+                                         ▼
+                              ┌─────────────────────┐
+                              │ Execute command     │
+                              └─────────────────────┘
+```
+
+### Auto-Install Addon
+
+The CLI bundles the addon or downloads it on first run:
+
+```typescript
+async function ensureAddonInstalled(): Promise<void> {
+  const addonsDir = getAddonsDirectory();
+  const addonPath = path.join(addonsDir, '@local-labs', 'local-addon-cli-mcp');
+
+  if (!fs.existsSync(addonPath)) {
+    console.log('Installing Local CLI & MCP addon...');
+
+    // Option 1: Download from GitHub Releases
+    const release = await fetchLatestRelease('local-labs/local-addon-cli-mcp');
+    await downloadAndExtract(release.tarball_url, addonPath);
+
+    // Option 2: Download from npm (if published)
+    // await exec('npm pack @local-labs/local-addon-cli-mcp');
+    // await extractTarball('./local-addon-cli-mcp-*.tgz', addonPath);
+  }
+}
+
+function getAddonsDirectory(): string {
+  switch (process.platform) {
+    case 'darwin':
+      return path.join(os.homedir(), 'Library/Application Support/Local/addons');
+    case 'win32':
+      return path.join(process.env.APPDATA!, 'Local/addons');
+    case 'linux':
+      return path.join(os.homedir(), '.config/Local/addons');
+  }
+}
+```
+
+### Auto-Activate Addon
+
+Modify `enabled-addons.json` to activate without UI interaction:
+
+```typescript
+async function ensureAddonActivated(): Promise<boolean> {
+  const prefsPath = getEnabledAddonsPath();
+
+  let enabledAddons: Record<string, boolean> = {};
+  if (fs.existsSync(prefsPath)) {
+    enabledAddons = JSON.parse(fs.readFileSync(prefsPath, 'utf-8'));
+  }
+
+  if (enabledAddons['@local-labs/local-addon-cli-mcp'] === true) {
+    return false; // Already active, no restart needed
+  }
+
+  enabledAddons['@local-labs/local-addon-cli-mcp'] = true;
+  fs.writeFileSync(prefsPath, JSON.stringify(enabledAddons, null, 2));
+
+  return true; // Restart needed
+}
+
+function getEnabledAddonsPath(): string {
+  switch (process.platform) {
+    case 'darwin':
+      return path.join(os.homedir(), 'Library/Application Support/Local/enabled-addons.json');
+    case 'win32':
+      return path.join(process.env.APPDATA!, 'Local/enabled-addons.json');
+    case 'linux':
+      return path.join(os.homedir(), '.config/Local/enabled-addons.json');
+  }
+}
+```
+
+### Auto-Start/Restart Local
+
+Control Local app lifecycle from the CLI:
+
+```typescript
+async function ensureLocalRunning(needsRestart: boolean): Promise<void> {
+  const isRunning = await isLocalRunning();
+
+  if (needsRestart && isRunning) {
+    console.log('Restarting Local to activate addon...');
+    await stopLocal();
+    await delay(2000);
+  }
+
+  if (!isRunning || needsRestart) {
+    console.log('Starting Local...');
+    await startLocal();
+    await waitForMcpServer();
+  }
+}
+
+async function isLocalRunning(): Promise<boolean> {
+  switch (process.platform) {
+    case 'darwin':
+      const { stdout } = await exec('pgrep -x "Local"');
+      return stdout.trim().length > 0;
+    case 'win32':
+      const { stdout: winOut } = await exec('tasklist /FI "IMAGENAME eq Local.exe"');
+      return winOut.includes('Local.exe');
+    case 'linux':
+      const { stdout: linuxOut } = await exec('pgrep -x "local"');
+      return linuxOut.trim().length > 0;
+  }
+}
+
+async function startLocal(): Promise<void> {
+  switch (process.platform) {
+    case 'darwin':
+      await exec('open -a "Local"');
+      break;
+    case 'win32':
+      await exec('start "" "C:\\Program Files\\Local\\Local.exe"');
+      break;
+    case 'linux':
+      await exec('local &');
+      break;
+  }
+}
+
+async function stopLocal(): Promise<void> {
+  switch (process.platform) {
+    case 'darwin':
+      await exec('osascript -e \'quit app "Local"\'');
+      break;
+    case 'win32':
+      await exec('taskkill /IM Local.exe');
+      break;
+    case 'linux':
+      await exec('pkill -x local');
+      break;
+  }
+}
+
+async function waitForMcpServer(timeout = 30000): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    try {
+      const response = await fetch('http://127.0.0.1:5890/health');
+      if (response.ok) return;
+    } catch {
+      // Server not ready yet
+    }
+    await delay(500);
+  }
+  throw new Error('Timed out waiting for Local MCP server');
+}
+```
+
+### Edge Cases
+
+| Scenario                           | Behavior                                                                         |
+| ---------------------------------- | -------------------------------------------------------------------------------- |
+| Local not installed                | Error with download link: "Local is required. Download from https://localwp.com" |
+| Addon update available             | Check on `lwp --version`, prompt user to update                                  |
+| Local running but addon not loaded | Restart Local automatically                                                      |
+| MCP server port in use             | Detect conflict, suggest resolution                                              |
+| Network offline (first install)    | Error with manual install instructions                                           |
+| Permission denied (addons dir)     | Error with sudo/admin instructions                                               |
+
+### First Run Experience
+
+```
+$ npm install -g @local-labs/local-cli
+
+$ lwp sites list
+Local CLI & MCP addon not found.
+Installing addon... done.
+Activating addon... done.
+Starting Local... done.
+Waiting for MCP server... ready.
+
+┌─────────────┬───────────────────────┬─────────┐
+│ Name        │ Domain                │ Status  │
+├─────────────┼───────────────────────┼─────────┤
+│ my-blog     │ my-blog.local         │ stopped │
+│ test-site   │ test-site.local       │ stopped │
+└─────────────┴───────────────────────┴─────────┘
+```
+
+Subsequent runs are instant since everything is already set up.
+
 ## CLI Design
 
 ### Command Structure
