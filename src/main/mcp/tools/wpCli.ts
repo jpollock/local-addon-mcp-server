@@ -17,10 +17,18 @@ export const wpCliDefinition: McpToolDefinition = {
         description: 'Site name or ID (partial names work)',
       },
       command: {
-        type: 'array',
-        items: { type: 'string' },
-        description:
-          'WP-CLI command and arguments as array, e.g. ["plugin", "list", "--format=json"]',
+        oneOf: [
+          {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'WP-CLI command as array, e.g. ["plugin", "list", "--format=json"]',
+          },
+          {
+            type: 'string',
+            description: 'WP-CLI command as string, e.g. "plugin list --format=json"',
+          },
+        ],
+        description: 'WP-CLI command - either as array ["plugin", "list"] or string "plugin list"',
       },
     },
     required: ['site', 'command'],
@@ -29,14 +37,14 @@ export const wpCliDefinition: McpToolDefinition = {
 
 interface WpCliArgs {
   site: string;
-  command: string[];
+  command: string[] | string;
 }
 
 export async function wpCli(
   args: Record<string, unknown>,
   services: LocalServices
 ): Promise<McpToolResult> {
-  const { site: siteQuery, command } = args as unknown as WpCliArgs;
+  const { site: siteQuery, command: rawCommand } = args as unknown as WpCliArgs;
 
   if (!siteQuery) {
     return {
@@ -45,12 +53,44 @@ export async function wpCli(
     };
   }
 
-  if (!command || !Array.isArray(command) || command.length === 0) {
+  if (!rawCommand) {
     return {
       content: [
         {
           type: 'text',
-          text: 'Error: command parameter is required and must be a non-empty array',
+          text: 'Error: command parameter is required',
+        },
+      ],
+      isError: true,
+    };
+  }
+
+  // Normalize command to array - accept both string and array formats
+  let command: string[];
+  if (typeof rawCommand === 'string') {
+    // Split string on whitespace, preserving quoted strings would be complex
+    // For simple cases, split on spaces
+    command = rawCommand.trim().split(/\s+/).filter(Boolean);
+  } else if (Array.isArray(rawCommand)) {
+    command = rawCommand;
+  } else {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: 'Error: command must be a string or array of strings',
+        },
+      ],
+      isError: true,
+    };
+  }
+
+  if (command.length === 0) {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: 'Error: command cannot be empty',
         },
       ],
       isError: true,
