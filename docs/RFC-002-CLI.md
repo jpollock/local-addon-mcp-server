@@ -82,10 +82,39 @@ The **addon is required** because it:
 
 | Item             | New Value                                                  |
 | ---------------- | ---------------------------------------------------------- |
-| Package name     | `@local-labs/local-addon-cli`                              |
-| Product name     | `Local CLI`                                                |
+| Package name     | `@local-labs/local-addon-cli-mcp`                          |
+| Product name     | `Local CLI & MCP`                                          |
 | Preferences menu | `CLI & AI Tools`                                           |
 | Description      | "Command-line interface and AI tool integration for Local" |
+
+### Coexistence: CLI and MCP Work Together
+
+The CLI does NOT replace MCP. Both are clients of the same addon backend:
+
+```
+┌────────────────────────────────────────────────────┐
+│                  Local App                          │
+│  ┌──────────────────────────────────────────────┐  │
+│  │      Addon Backend (runs inside Local)        │  │
+│  │   HTTP Server + GraphQL + 40 MCP Tools        │  │
+│  └──────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────┘
+        ▲              ▲              ▲
+        │ HTTP         │ stdio        │ SSE
+        │              │              │
+   ┌────┴────┐    ┌────┴────┐    ┌────┴────┐
+   │   lwp   │    │ Claude  │    │Claude.ai│
+   │  (CLI)  │    │  Code   │    │ ChatGPT │
+   └─────────┘    └─────────┘    └─────────┘
+```
+
+All three work **simultaneously**:
+
+- **lwp** (CLI) → HTTP requests to addon
+- **Claude Code** → stdio JSON-RPC to addon
+- **Claude.ai/ChatGPT** → SSE to addon
+
+The addon remains an MCP server. The CLI is an additional human-friendly client.
 
 ### Preferences Panel Updates
 
@@ -142,7 +171,7 @@ However, they live in the **same repository** to share:
 ### Repository Structure
 
 ```
-local-addon-cli/
+local-addon-cli-mcp/
 ├── src/
 │   ├── main/           # Addon main process (runs in Local)
 │   ├── renderer/       # Addon preferences panel
