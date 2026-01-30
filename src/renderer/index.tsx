@@ -1,78 +1,114 @@
 /**
  * MCP Server Addon - Renderer Entry Point
  * Adds MCP Server preferences panel to Local
+ *
+ * Uses class components for compatibility with Local's Electron environment.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React from 'react';
 import { getThemeColors, onThemeChange, ThemeColors } from '../common/theme';
 
-// MCP Preferences Panel Component
-const McpPreferencesPanel: React.FC<{ electron: any }> = ({ electron }) => {
-  const [status, setStatus] = useState<{
-    running: boolean;
-    port: number;
-    uptime: number;
-    error?: string;
-  } | null>(null);
-  const [connectionInfo, setConnectionInfo] = useState<{
-    url: string;
-    authToken: string;
-    port: number;
-    version: string;
-    tools: string[];
-  } | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [copied, setCopied] = useState(false);
-  const [actionInProgress, setActionInProgress] = useState(false);
-  const [activeTab, setActiveTab] = useState<'status' | 'setup'>('status');
-  const [colors, setColors] = useState<ThemeColors>(getThemeColors());
+// Type definitions
+interface McpStatus {
+  running: boolean;
+  port: number;
+  uptime: number;
+  error?: string;
+}
 
-  // Fetch MCP status
-  const fetchStatus = useCallback(async () => {
+interface ConnectionInfo {
+  url: string;
+  authToken: string;
+  port: number;
+  version: string;
+  tools: string[];
+}
+
+interface McpPreferencesPanelProps {
+  electron: {
+    ipcRenderer?: {
+      invoke: (channel: string, ...args: unknown[]) => Promise<unknown>;
+    };
+  };
+}
+
+interface McpPreferencesPanelState {
+  status: McpStatus | null;
+  connectionInfo: ConnectionInfo | null;
+  loading: boolean;
+  copied: boolean;
+  actionInProgress: boolean;
+  activeTab: 'status' | 'setup';
+  colors: ThemeColors;
+}
+
+// MCP Preferences Panel Component (Class-based for Local compatibility)
+class McpPreferencesPanel extends React.Component<
+  McpPreferencesPanelProps,
+  McpPreferencesPanelState
+> {
+  private statusInterval?: ReturnType<typeof setInterval>;
+  private themeCleanup?: () => void;
+
+  state: McpPreferencesPanelState = {
+    status: null,
+    connectionInfo: null,
+    loading: true,
+    copied: false,
+    actionInProgress: false,
+    activeTab: 'status',
+    colors: getThemeColors(),
+  };
+
+  componentDidMount(): void {
+    this.init();
+    this.statusInterval = setInterval(() => this.fetchStatus(), 5000);
+    this.themeCleanup = onThemeChange(() => {
+      this.setState({ colors: getThemeColors() });
+    });
+  }
+
+  componentWillUnmount(): void {
+    if (this.statusInterval) {
+      clearInterval(this.statusInterval);
+    }
+    if (this.themeCleanup) {
+      this.themeCleanup();
+    }
+  }
+
+  private async init(): Promise<void> {
+    await Promise.all([this.fetchStatus(), this.fetchConnectionInfo()]);
+    this.setState({ loading: false });
+  }
+
+  private fetchStatus = async (): Promise<void> => {
     try {
-      const result = await electron?.ipcRenderer?.invoke('mcp:getStatus');
+      const result = (await this.props.electron?.ipcRenderer?.invoke('mcp:getStatus')) as
+        | McpStatus
+        | undefined;
       if (result) {
-        setStatus(result);
+        this.setState({ status: result });
       }
     } catch (error) {
       console.error('Failed to fetch MCP status:', error);
     }
-  }, [electron]);
+  };
 
-  // Fetch connection info
-  const fetchConnectionInfo = useCallback(async () => {
+  private fetchConnectionInfo = async (): Promise<void> => {
     try {
-      const result = await electron?.ipcRenderer?.invoke('mcp:getConnectionInfo');
+      const result = (await this.props.electron?.ipcRenderer?.invoke('mcp:getConnectionInfo')) as
+        | ConnectionInfo
+        | undefined;
       if (result) {
-        setConnectionInfo(result);
+        this.setState({ connectionInfo: result });
       }
     } catch (error) {
       console.error('Failed to fetch connection info:', error);
     }
-  }, [electron]);
+  };
 
-  useEffect(() => {
-    const init = async () => {
-      await Promise.all([fetchStatus(), fetchConnectionInfo()]);
-      setLoading(false);
-    };
-    init();
-
-    // Refresh status every 5 seconds
-    const interval = setInterval(fetchStatus, 5000);
-
-    // Subscribe to theme changes
-    const cleanup = onThemeChange(() => {
-      setColors(getThemeColors());
-    });
-
-    return () => {
-      clearInterval(interval);
-      cleanup();
-    };
-  }, [electron, fetchStatus, fetchConnectionInfo]);
-
-  const handleCopyStdioConfig = () => {
+  private handleCopyStdioConfig = (): void => {
     const config = {
       mcpServers: {
         local: {
@@ -83,11 +119,12 @@ const McpPreferencesPanel: React.FC<{ electron: any }> = ({ electron }) => {
       },
     };
     navigator.clipboard.writeText(JSON.stringify(config, null, 2));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    this.setState({ copied: true });
+    setTimeout(() => this.setState({ copied: false }), 2000);
   };
 
-  const handleCopySseConfig = () => {
+  private handleCopySseConfig = (): void => {
+    const { connectionInfo } = this.state;
     if (connectionInfo) {
       const config = {
         mcpServers: {
@@ -101,12 +138,13 @@ const McpPreferencesPanel: React.FC<{ electron: any }> = ({ electron }) => {
         },
       };
       navigator.clipboard.writeText(JSON.stringify(config, null, 2));
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      this.setState({ copied: true });
+      setTimeout(() => this.setState({ copied: false }), 2000);
     }
   };
 
-  const handleTestConnection = async () => {
+  private handleTestConnection = async (): Promise<void> => {
+    const { connectionInfo } = this.state;
     try {
       const response = await fetch(`http://127.0.0.1:${connectionInfo?.port}/health`);
       const data = await response.json();
@@ -115,42 +153,46 @@ const McpPreferencesPanel: React.FC<{ electron: any }> = ({ electron }) => {
       } else {
         alert('Connection failed: Server returned unexpected response');
       }
-    } catch (error: any) {
-      alert(`Connection failed: ${error.message}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Connection failed: ${message}`);
     }
   };
 
-  const handleStartStop = async () => {
-    setActionInProgress(true);
+  private handleStartStop = async (): Promise<void> => {
+    const { status } = this.state;
+    this.setState({ actionInProgress: true });
     try {
       if (status?.running) {
-        await electron?.ipcRenderer?.invoke('mcp:stop');
+        await this.props.electron?.ipcRenderer?.invoke('mcp:stop');
       } else {
-        await electron?.ipcRenderer?.invoke('mcp:start');
+        await this.props.electron?.ipcRenderer?.invoke('mcp:start');
       }
-      await fetchStatus();
-      await fetchConnectionInfo();
-    } catch (error: any) {
-      alert(`Action failed: ${error.message}`);
+      await this.fetchStatus();
+      await this.fetchConnectionInfo();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Action failed: ${message}`);
     } finally {
-      setActionInProgress(false);
+      this.setState({ actionInProgress: false });
     }
   };
 
-  const handleRestart = async () => {
-    setActionInProgress(true);
+  private handleRestart = async (): Promise<void> => {
+    this.setState({ actionInProgress: true });
     try {
-      await electron?.ipcRenderer?.invoke('mcp:restart');
-      await fetchStatus();
-      await fetchConnectionInfo();
-    } catch (error: any) {
-      alert(`Restart failed: ${error.message}`);
+      await this.props.electron?.ipcRenderer?.invoke('mcp:restart');
+      await this.fetchStatus();
+      await this.fetchConnectionInfo();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Restart failed: ${message}`);
     } finally {
-      setActionInProgress(false);
+      this.setState({ actionInProgress: false });
     }
   };
 
-  const handleRegenerateToken = async () => {
+  private handleRegenerateToken = async (): Promise<void> => {
     if (
       !confirm(
         'Regenerate authentication token? You will need to update your AI tool configuration.'
@@ -158,94 +200,170 @@ const McpPreferencesPanel: React.FC<{ electron: any }> = ({ electron }) => {
     ) {
       return;
     }
-    setActionInProgress(true);
+    this.setState({ actionInProgress: true });
     try {
-      const result = await electron?.ipcRenderer?.invoke('mcp:regenerateToken');
+      const result = (await this.props.electron?.ipcRenderer?.invoke('mcp:regenerateToken')) as {
+        success?: boolean;
+        error?: string;
+      };
       if (result?.success) {
-        await fetchConnectionInfo();
+        await this.fetchConnectionInfo();
         alert('Token regenerated successfully. Please update your AI tool configuration.');
       } else {
         alert(`Failed to regenerate token: ${result?.error}`);
       }
-    } catch (error: any) {
-      alert(`Failed to regenerate token: ${error.message}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Failed to regenerate token: ${message}`);
     } finally {
-      setActionInProgress(false);
+      this.setState({ actionInProgress: false });
     }
   };
 
-  const getStatusColor = () => {
+  private getStatusColor(): string {
+    const { status, colors } = this.state;
     if (!status) return colors.textMuted;
     if (status.running) return colors.successText;
     return colors.errorText;
-  };
+  }
 
-  const getStatusText = () => {
+  private getStatusText(): string {
+    const { loading, status } = this.state;
     if (loading) return 'Loading...';
     if (!status) return 'Unknown';
     if (status.running) return 'Running';
     return 'Stopped';
-  };
+  }
 
-  const formatUptime = (seconds: number) => {
+  private formatUptime(seconds: number): string {
     if (seconds < 60) return `${Math.floor(seconds)}s`;
     if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
     return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
-  };
+  }
 
-  const tabStyle = (isActive: boolean): React.CSSProperties => ({
-    padding: '8px 16px',
-    border: 'none',
-    borderBottom: isActive ? `2px solid ${colors.primary}` : '2px solid transparent',
-    backgroundColor: 'transparent',
-    color: isActive ? colors.primary : colors.textSecondary,
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: isActive ? 600 : 400,
-  });
+  private getTabStyle(isActive: boolean): React.CSSProperties {
+    const { colors } = this.state;
+    return {
+      padding: '8px 16px',
+      border: 'none',
+      borderBottom: isActive ? `2px solid ${colors.primary}` : '2px solid transparent',
+      backgroundColor: 'transparent',
+      color: isActive ? colors.primary : colors.textSecondary,
+      cursor: 'pointer',
+      fontSize: '14px',
+      fontWeight: isActive ? 600 : 400,
+    };
+  }
 
-  const buttonStyle = (bgColor: string, disabled?: boolean): React.CSSProperties => ({
-    padding: '8px 16px',
-    backgroundColor: bgColor,
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    fontSize: '13px',
-    opacity: disabled ? 0.5 : 1,
-  });
+  private getButtonStyle(bgColor: string, disabled?: boolean): React.CSSProperties {
+    return {
+      padding: '8px 16px',
+      backgroundColor: bgColor,
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      cursor: disabled ? 'not-allowed' : 'pointer',
+      fontSize: '13px',
+      opacity: disabled ? 0.5 : 1,
+    };
+  }
 
-  return (
-    <div style={{ padding: '20px', color: colors.textPrimary }}>
-      <h2
-        style={{
-          marginBottom: '20px',
-          fontSize: '18px',
-          fontWeight: 600,
-          color: colors.textPrimary,
-        }}
-      >
-        MCP Server
-      </h2>
+  private renderStatusTab(): React.ReactNode {
+    const { status, connectionInfo, actionInProgress, colors } = this.state;
 
-      <p style={{ color: colors.textSecondary, marginBottom: '24px' }}>
-        The MCP (Model Context Protocol) server enables AI tools like Claude Code to control your
-        Local sites.
-      </p>
+    return (
+      <>
+        {/* Status Section */}
+        <div style={{ marginBottom: '24px' }}>
+          <h3
+            style={{
+              fontSize: '14px',
+              fontWeight: 600,
+              marginBottom: '12px',
+              color: colors.textPrimary,
+            }}
+          >
+            Server Status
+          </h3>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '12px',
+              backgroundColor: colors.panelBgSecondary,
+              borderRadius: '6px',
+            }}
+          >
+            <span
+              style={{
+                width: '12px',
+                height: '12px',
+                borderRadius: '50%',
+                backgroundColor: this.getStatusColor(),
+              }}
+            />
+            <span style={{ fontWeight: 500, color: colors.textPrimary }}>
+              {this.getStatusText()}
+            </span>
+            {status?.running && (
+              <>
+                <span style={{ color: colors.textSecondary }}>|</span>
+                <span style={{ color: colors.textSecondary }}>Port: {status.port}</span>
+                <span style={{ color: colors.textSecondary }}>|</span>
+                <span style={{ color: colors.textSecondary }}>
+                  Uptime: {this.formatUptime(status.uptime)}
+                </span>
+              </>
+            )}
+          </div>
+        </div>
 
-      {/* Tab Navigation */}
-      <div style={{ borderBottom: `1px solid ${colors.border}`, marginBottom: '24px' }}>
-        <button style={tabStyle(activeTab === 'status')} onClick={() => setActiveTab('status')}>
-          Status & Controls
-        </button>
-        <button style={tabStyle(activeTab === 'setup')} onClick={() => setActiveTab('setup')}>
-          AI Tool Setup
-        </button>
-      </div>
+        {/* Server Controls */}
+        <div style={{ marginBottom: '24px' }}>
+          <h3
+            style={{
+              fontSize: '14px',
+              fontWeight: 600,
+              marginBottom: '12px',
+              color: colors.textPrimary,
+            }}
+          >
+            Server Controls
+          </h3>
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            <button
+              onClick={this.handleStartStop}
+              disabled={actionInProgress}
+              style={this.getButtonStyle(
+                status?.running ? colors.errorText : colors.successText,
+                actionInProgress
+              )}
+            >
+              {status?.running ? 'Stop Server' : 'Start Server'}
+            </button>
+            <button
+              onClick={this.handleRestart}
+              disabled={actionInProgress || !status?.running}
+              style={this.getButtonStyle('#6c757d', actionInProgress || !status?.running)}
+            >
+              Restart Server
+            </button>
+            <button
+              onClick={this.handleTestConnection}
+              disabled={!status?.running}
+              style={this.getButtonStyle(
+                status?.running ? '#17a2b8' : colors.textMuted,
+                !status?.running
+              )}
+            >
+              Test Connection
+            </button>
+          </div>
+        </div>
 
-      {activeTab === 'status' && (
-        <>
-          {/* Status Section */}
+        {/* Connection Info Section */}
+        {connectionInfo && (
           <div style={{ marginBottom: '24px' }}>
             <h3
               style={{
@@ -255,206 +373,122 @@ const McpPreferencesPanel: React.FC<{ electron: any }> = ({ electron }) => {
                 color: colors.textPrimary,
               }}
             >
-              Server Status
+              Connection Info
             </h3>
             <div
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
                 padding: '12px',
                 backgroundColor: colors.panelBgSecondary,
                 borderRadius: '6px',
-              }}
-            >
-              <span
-                style={{
-                  width: '12px',
-                  height: '12px',
-                  borderRadius: '50%',
-                  backgroundColor: getStatusColor(),
-                }}
-              />
-              <span style={{ fontWeight: 500, color: colors.textPrimary }}>{getStatusText()}</span>
-              {status?.running && (
-                <>
-                  <span style={{ color: colors.textSecondary }}>|</span>
-                  <span style={{ color: colors.textSecondary }}>Port: {status.port}</span>
-                  <span style={{ color: colors.textSecondary }}>|</span>
-                  <span style={{ color: colors.textSecondary }}>
-                    Uptime: {formatUptime(status.uptime)}
-                  </span>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Server Controls */}
-          <div style={{ marginBottom: '24px' }}>
-            <h3
-              style={{
-                fontSize: '14px',
-                fontWeight: 600,
-                marginBottom: '12px',
+                fontFamily: 'monospace',
+                fontSize: '12px',
                 color: colors.textPrimary,
               }}
             >
-              Server Controls
-            </h3>
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              <button
-                onClick={handleStartStop}
-                disabled={actionInProgress}
-                style={buttonStyle(
-                  status?.running ? colors.errorText : colors.successText,
-                  actionInProgress
-                )}
-              >
-                {status?.running ? 'Stop Server' : 'Start Server'}
-              </button>
-              <button
-                onClick={handleRestart}
-                disabled={actionInProgress || !status?.running}
-                style={buttonStyle('#6c757d', actionInProgress || !status?.running)}
-              >
-                Restart Server
-              </button>
-              <button
-                onClick={handleTestConnection}
-                disabled={!status?.running}
-                style={buttonStyle(
-                  status?.running ? '#17a2b8' : colors.textMuted,
-                  !status?.running
-                )}
-              >
-                Test Connection
-              </button>
-            </div>
-          </div>
-
-          {/* Connection Info Section */}
-          {connectionInfo && (
-            <div style={{ marginBottom: '24px' }}>
-              <h3
-                style={{
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  marginBottom: '12px',
-                  color: colors.textPrimary,
-                }}
-              >
-                Connection Info
-              </h3>
-              <div
-                style={{
-                  padding: '12px',
-                  backgroundColor: colors.panelBgSecondary,
-                  borderRadius: '6px',
-                  fontFamily: 'monospace',
-                  fontSize: '12px',
-                  color: colors.textPrimary,
-                }}
-              >
-                <div style={{ marginBottom: '8px' }}>
-                  <strong>URL:</strong> {connectionInfo.url}
-                </div>
-                <div style={{ marginBottom: '8px' }}>
-                  <strong>stdio script:</strong> bin/mcp-stdio.js
-                </div>
-                <div style={{ marginBottom: '8px' }}>
-                  <strong>Version:</strong> {connectionInfo.version}
-                </div>
-                <div>
-                  <strong>Tools:</strong> {connectionInfo.tools.join(', ')}
-                </div>
+              <div style={{ marginBottom: '8px' }}>
+                <strong>URL:</strong> {connectionInfo.url}
+              </div>
+              <div style={{ marginBottom: '8px' }}>
+                <strong>stdio script:</strong> bin/mcp-stdio.js
+              </div>
+              <div style={{ marginBottom: '8px' }}>
+                <strong>Version:</strong> {connectionInfo.version}
+              </div>
+              <div>
+                <strong>Tools:</strong> {connectionInfo.tools.join(', ')}
               </div>
             </div>
-          )}
-
-          {/* Security Section */}
-          <div style={{ marginBottom: '24px' }}>
-            <h3
-              style={{
-                fontSize: '14px',
-                fontWeight: 600,
-                marginBottom: '12px',
-                color: colors.textPrimary,
-              }}
-            >
-              Security
-            </h3>
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              <button
-                onClick={handleRegenerateToken}
-                disabled={actionInProgress || !status?.running}
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: '#ffc107',
-                  color: '#212529',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: actionInProgress || !status?.running ? 'not-allowed' : 'pointer',
-                  fontSize: '13px',
-                  opacity: actionInProgress || !status?.running ? 0.5 : 1,
-                }}
-              >
-                Regenerate Token
-              </button>
-            </div>
-            <p style={{ fontSize: '12px', color: colors.textSecondary, marginTop: '8px' }}>
-              Regenerating the token will require you to update your AI tool configuration.
-            </p>
           </div>
-        </>
-      )}
+        )}
 
-      {activeTab === 'setup' && (
-        <>
-          {/* Claude Code Setup */}
-          <div style={{ marginBottom: '24px' }}>
-            <h3
+        {/* Security Section */}
+        <div style={{ marginBottom: '24px' }}>
+          <h3
+            style={{
+              fontSize: '14px',
+              fontWeight: 600,
+              marginBottom: '12px',
+              color: colors.textPrimary,
+            }}
+          >
+            Security
+          </h3>
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            <button
+              onClick={this.handleRegenerateToken}
+              disabled={actionInProgress || !status?.running}
               style={{
-                fontSize: '14px',
-                fontWeight: 600,
-                marginBottom: '12px',
-                color: colors.textPrimary,
+                padding: '8px 16px',
+                backgroundColor: '#ffc107',
+                color: '#212529',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: actionInProgress || !status?.running ? 'not-allowed' : 'pointer',
+                fontSize: '13px',
+                opacity: actionInProgress || !status?.running ? 0.5 : 1,
               }}
             >
-              Claude Code (Recommended)
-            </h3>
-            <div
-              style={{
-                padding: '16px',
-                backgroundColor: colors.panelBgSecondary,
-                borderRadius: '6px',
-              }}
-            >
-              <p style={{ margin: '0 0 12px 0', fontSize: '13px', color: colors.textPrimary }}>
-                Add the following to your{' '}
-                <code
-                  style={{
-                    backgroundColor: colors.panelBgCode,
-                    padding: '2px 4px',
-                    borderRadius: '3px',
-                    color: '#f8f8f2',
-                  }}
-                >
-                  ~/.claude.json
-                </code>{' '}
-                file:
-              </p>
-              <pre
+              Regenerate Token
+            </button>
+          </div>
+          <p style={{ fontSize: '12px', color: colors.textSecondary, marginTop: '8px' }}>
+            Regenerating the token will require you to update your AI tool configuration.
+          </p>
+        </div>
+      </>
+    );
+  }
+
+  private renderSetupTab(): React.ReactNode {
+    const { connectionInfo, copied, colors } = this.state;
+
+    return (
+      <>
+        {/* Claude Code Setup */}
+        <div style={{ marginBottom: '24px' }}>
+          <h3
+            style={{
+              fontSize: '14px',
+              fontWeight: 600,
+              marginBottom: '12px',
+              color: colors.textPrimary,
+            }}
+          >
+            Claude Code (Recommended)
+          </h3>
+          <div
+            style={{
+              padding: '16px',
+              backgroundColor: colors.panelBgSecondary,
+              borderRadius: '6px',
+            }}
+          >
+            <p style={{ margin: '0 0 12px 0', fontSize: '13px', color: colors.textPrimary }}>
+              Add the following to your{' '}
+              <code
                 style={{
                   backgroundColor: colors.panelBgCode,
+                  padding: '2px 4px',
+                  borderRadius: '3px',
                   color: '#f8f8f2',
-                  padding: '12px',
-                  borderRadius: '4px',
-                  fontSize: '11px',
-                  overflow: 'auto',
-                  margin: '0 0 12px 0',
                 }}
               >
-                {`{
+                ~/.claude.json
+              </code>{' '}
+              file:
+            </p>
+            <pre
+              style={{
+                backgroundColor: colors.panelBgCode,
+                color: '#f8f8f2',
+                padding: '12px',
+                borderRadius: '4px',
+                fontSize: '11px',
+                overflow: 'auto',
+                margin: '0 0 12px 0',
+              }}
+            >
+              {`{
   "mcpServers": {
     "local": {
       "type": "stdio",
@@ -463,48 +497,51 @@ const McpPreferencesPanel: React.FC<{ electron: any }> = ({ electron }) => {
     }
   }
 }`}
-              </pre>
-              <button onClick={handleCopyStdioConfig} style={buttonStyle(colors.primary)}>
-                {copied ? 'Copied!' : 'Copy Config'}
-              </button>
-            </div>
+            </pre>
+            <button
+              onClick={this.handleCopyStdioConfig}
+              style={this.getButtonStyle(colors.primary)}
+            >
+              {copied ? 'Copied!' : 'Copy Config'}
+            </button>
           </div>
+        </div>
 
-          {/* Claude.ai / ChatGPT Setup */}
-          <div style={{ marginBottom: '24px' }}>
-            <h3
+        {/* Claude.ai / ChatGPT Setup */}
+        <div style={{ marginBottom: '24px' }}>
+          <h3
+            style={{
+              fontSize: '14px',
+              fontWeight: 600,
+              marginBottom: '12px',
+              color: colors.textPrimary,
+            }}
+          >
+            Claude.ai / ChatGPT / Other AI Tools
+          </h3>
+          <div
+            style={{
+              padding: '16px',
+              backgroundColor: colors.panelBgSecondary,
+              borderRadius: '6px',
+            }}
+          >
+            <p style={{ margin: '0 0 12px 0', fontSize: '13px', color: colors.textPrimary }}>
+              For tools that support SSE transport, use this configuration:
+            </p>
+            <pre
               style={{
-                fontSize: '14px',
-                fontWeight: 600,
-                marginBottom: '12px',
-                color: colors.textPrimary,
+                backgroundColor: colors.panelBgCode,
+                color: '#f8f8f2',
+                padding: '12px',
+                borderRadius: '4px',
+                fontSize: '11px',
+                overflow: 'auto',
+                margin: '0 0 12px 0',
               }}
             >
-              Claude.ai / ChatGPT / Other AI Tools
-            </h3>
-            <div
-              style={{
-                padding: '16px',
-                backgroundColor: colors.panelBgSecondary,
-                borderRadius: '6px',
-              }}
-            >
-              <p style={{ margin: '0 0 12px 0', fontSize: '13px', color: colors.textPrimary }}>
-                For tools that support SSE transport, use this configuration:
-              </p>
-              <pre
-                style={{
-                  backgroundColor: colors.panelBgCode,
-                  color: '#f8f8f2',
-                  padding: '12px',
-                  borderRadius: '4px',
-                  fontSize: '11px',
-                  overflow: 'auto',
-                  margin: '0 0 12px 0',
-                }}
-              >
-                {connectionInfo
-                  ? `{
+              {connectionInfo
+                ? `{
   "mcpServers": {
     "local": {
       "url": "${connectionInfo.url}/mcp/sse",
@@ -515,80 +552,125 @@ const McpPreferencesPanel: React.FC<{ electron: any }> = ({ electron }) => {
     }
   }
 }`
-                  : 'Server not running'}
-              </pre>
-              <button
-                onClick={handleCopySseConfig}
-                disabled={!connectionInfo}
-                style={buttonStyle(
-                  connectionInfo ? colors.primary : colors.textMuted,
-                  !connectionInfo
-                )}
-              >
-                {copied ? 'Copied!' : 'Copy SSE Config'}
-              </button>
-            </div>
+                : 'Server not running'}
+            </pre>
+            <button
+              onClick={this.handleCopySseConfig}
+              disabled={!connectionInfo}
+              style={this.getButtonStyle(
+                connectionInfo ? colors.primary : colors.textMuted,
+                !connectionInfo
+              )}
+            >
+              {copied ? 'Copied!' : 'Copy SSE Config'}
+            </button>
           </div>
+        </div>
 
-          {/* Available Commands */}
-          <div style={{ marginBottom: '24px' }}>
-            <h3
+        {/* Available Commands */}
+        <div style={{ marginBottom: '24px' }}>
+          <h3
+            style={{
+              fontSize: '14px',
+              fontWeight: 600,
+              marginBottom: '12px',
+              color: colors.textPrimary,
+            }}
+          >
+            Example Commands
+          </h3>
+          <div
+            style={{
+              padding: '16px',
+              backgroundColor: colors.infoBg,
+              borderRadius: '6px',
+              border: `1px solid ${colors.infoBorder}`,
+            }}
+          >
+            <p
               style={{
-                fontSize: '14px',
-                fontWeight: 600,
-                marginBottom: '12px',
-                color: colors.textPrimary,
+                margin: '0 0 8px 0',
+                fontSize: '13px',
+                fontWeight: 500,
+                color: colors.infoText,
               }}
             >
-              Example Commands
-            </h3>
-            <div
-              style={{
-                padding: '16px',
-                backgroundColor: colors.infoBg,
-                borderRadius: '6px',
-                border: `1px solid ${colors.infoBorder}`,
-              }}
+              Try saying to your AI assistant:
+            </p>
+            <ul
+              style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', color: colors.infoText }}
             >
-              <p
-                style={{
-                  margin: '0 0 8px 0',
-                  fontSize: '13px',
-                  fontWeight: 500,
-                  color: colors.infoText,
-                }}
-              >
-                Try saying to your AI assistant:
-              </p>
-              <ul
-                style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', color: colors.infoText }}
-              >
-                <li>&quot;List my Local sites&quot;</li>
-                <li>&quot;Start the blog site&quot;</li>
-                <li>&quot;Create a new site called test-project&quot;</li>
-                <li>&quot;Run wp plugin list on my-site&quot;</li>
-                <li>&quot;Stop all running sites&quot;</li>
-                <li>&quot;What plugins are installed on my-site?&quot;</li>
-              </ul>
-            </div>
+              <li>&quot;List my Local sites&quot;</li>
+              <li>&quot;Start the blog site&quot;</li>
+              <li>&quot;Create a new site called test-project&quot;</li>
+              <li>&quot;Run wp plugin list on my-site&quot;</li>
+              <li>&quot;Stop all running sites&quot;</li>
+              <li>&quot;What plugins are installed on my-site?&quot;</li>
+            </ul>
           </div>
-        </>
-      )}
-    </div>
-  );
-};
+        </div>
+      </>
+    );
+  }
+
+  render(): React.ReactNode {
+    const { activeTab, colors } = this.state;
+
+    return (
+      <div style={{ padding: '20px', color: colors.textPrimary }}>
+        <h2
+          style={{
+            marginBottom: '20px',
+            fontSize: '18px',
+            fontWeight: 600,
+            color: colors.textPrimary,
+          }}
+        >
+          MCP Server
+        </h2>
+
+        <p style={{ color: colors.textSecondary, marginBottom: '24px' }}>
+          The MCP (Model Context Protocol) server enables AI tools like Claude Code to control your
+          Local sites.
+        </p>
+
+        {/* Tab Navigation */}
+        <div style={{ borderBottom: `1px solid ${colors.border}`, marginBottom: '24px' }}>
+          <button
+            style={this.getTabStyle(activeTab === 'status')}
+            onClick={() => this.setState({ activeTab: 'status' })}
+          >
+            Status &amp; Controls
+          </button>
+          <button
+            style={this.getTabStyle(activeTab === 'setup')}
+            onClick={() => this.setState({ activeTab: 'setup' })}
+          >
+            AI Tool Setup
+          </button>
+        </div>
+
+        {activeTab === 'status' && this.renderStatusTab()}
+        {activeTab === 'setup' && this.renderSetupTab()}
+      </div>
+    );
+  }
+}
 
 // Export as a constructor function that Local can instantiate
-module.exports = function McpServerRenderer(context: any) {
-  const { hooks, electron } = context;
+module.exports = function McpServerRenderer(context: { hooks: unknown; electron: unknown }): void {
+  const { hooks, electron } = context as {
+    hooks: { addFilter: (name: string, callback: (items: unknown[]) => unknown[]) => void };
+    electron: McpPreferencesPanelProps['electron'];
+  };
 
   console.log('[MCP Server] Renderer loading...');
 
   // Add MCP Server to preferences menu
-  hooks.addFilter('preferencesMenuItems', (menuItems: any[]) => {
+  hooks.addFilter('preferencesMenuItems', (menuItems: unknown[]) => {
     console.log('[MCP Server] Adding MCP Server to preferences');
 
-    menuItems.push({
+    (menuItems as Array<Record<string, unknown>>).push({
       path: 'mcp-server',
       displayName: 'MCP Server',
       sections: () => <McpPreferencesPanel electron={electron} />,

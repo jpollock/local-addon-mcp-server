@@ -12,7 +12,7 @@
     "build": "npm run clean && tsc",
     "watch": "tsc --watch",
     "clean": "rm -rf lib coverage",
-    "lint": "eslint src --ext .ts,.tsx",
+    "lint": "eslint src --ext .ts,.tsx --max-warnings=0",
     "lint:fix": "eslint src --ext .ts,.tsx --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx}\"",
@@ -22,7 +22,17 @@
     "test:coverage": "jest --coverage",
     "validate-release": "node scripts/validate-release.js",
     "install-addon": "node scripts/install-addon.js",
-    "uninstall-addon": "node scripts/uninstall-addon.js"
+    "uninstall-addon": "node scripts/uninstall-addon.js",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix --max-warnings=0",
+      "prettier --write"
+    ],
+    "*.{json,md}": [
+      "prettier --write"
+    ]
   },
   "keywords": [
     "local",
@@ -50,6 +60,8 @@
   ],
   "devDependencies": {
     "@getflywheel/local": "^9.0.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.2.10",
     "@types/fs-extra": "^11.0.4",
     "@types/jest": "^29.5.12",
     "@types/node": "^20.0.0",
